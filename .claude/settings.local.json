@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(python create_atlas.py)",
+      "Bash(pip install:*)",
+      "Bash(taskkill /F /IM MinecraftClone.exe)",
+      "Bash(tasklist)",
+      "Bash(taskkill:*)",
+      "Bash(cmd:*)"
     ]
   }
 }

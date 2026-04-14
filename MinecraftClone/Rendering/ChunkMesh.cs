@@ -68,7 +68,7 @@ public class ChunkMesh
     }
 
     // Minecraft-typische Flächenhelligkeit (baked face shading, kein dynamisches Licht)
-    private static Color GetFaceColor(FaceDirection direction)
+    private static Color GetFaceColor(BlockType block, FaceDirection direction)
     {
         byte b = direction switch
         {
@@ -80,6 +80,16 @@ public class ChunkMesh
             FaceDirection.Bottom => 127,           // 0.50 — dunkel wie Minecraft Unterseite
             _                    => 255
         };
+
+        // Grass top: fixer Plains-Grün-Tint (~#91BD59) wie Minecraft-Biom
+        if (block == BlockType.Grass && direction == FaceDirection.Top)
+        {
+            return new Color(
+                (byte)(0x91 * b / 255),
+                (byte)(0xBD * b / 255),
+                (byte)(0x59 * b / 255));
+        }
+
         return new Color(b, b, b);
     }
 
@@ -87,7 +97,7 @@ public class ChunkMesh
     {
         int vertexOffset = _vertices.Count;
         Vector2 texCoord = GetTextureCoordinates(block, direction);
-        Color faceColor = GetFaceColor(direction);
+        Color faceColor = GetFaceColor(block, direction);
 
         Vector3[] positions;
 
@@ -157,7 +167,7 @@ public class ChunkMesh
                 return;
         }
 
-        float texSize = 0.25f; // 4x4 Texture Atlas
+        float texSize = 1f / 16f; // 16x16 Texture Atlas
 
         _vertices.Add(new VertexPositionColorTexture(positions[0], faceColor, texCoord + new Vector2(0, texSize)));
         _vertices.Add(new VertexPositionColorTexture(positions[1], faceColor, texCoord + new Vector2(0, 0)));
@@ -172,21 +182,23 @@ public class ChunkMesh
         _indices.Add(vertexOffset + 3);
     }
 
+    private static Vector2 Tile(int col, int row) => new Vector2(col / 16f, row / 16f);
+
     private Vector2 GetTextureCoordinates(BlockType block, FaceDirection direction)
     {
-        float texSize = 0.25f;
-
         return block switch
         {
-            BlockType.Grass => direction == FaceDirection.Top ? new Vector2(0, 0) :
-                               direction == FaceDirection.Bottom ? new Vector2(texSize, 0) :
-                               new Vector2(texSize * 2, 0),
-            BlockType.Dirt => new Vector2(texSize, 0),
-            BlockType.Stone => new Vector2(0, texSize),
-            BlockType.Wood => new Vector2(texSize, texSize),
-            BlockType.Leaves => new Vector2(texSize * 2, texSize),
-            BlockType.Sand => new Vector2(texSize * 3, 0),
-            _ => Vector2.Zero
+            BlockType.Grass  => direction == FaceDirection.Top    ? Tile(0, 0)
+                              : direction == FaceDirection.Bottom ? Tile(2, 0)
+                              : Tile(1, 0),
+            BlockType.Dirt   => Tile(2, 0),
+            BlockType.Stone  => Tile(3, 0),
+            BlockType.Wood   => (direction == FaceDirection.Top || direction == FaceDirection.Bottom)
+                              ? Tile(5, 0) : Tile(4, 0),
+            BlockType.Leaves => Tile(6, 0),
+            BlockType.Sand   => Tile(7, 0),
+            BlockType.Water  => Tile(8, 0),
+            _                => Vector2.Zero
         };
     }
 

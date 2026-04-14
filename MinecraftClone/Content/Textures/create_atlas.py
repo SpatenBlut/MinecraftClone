@@ -1,32 +1,34 @@
-from PIL import Image, ImageDraw
+from PIL import Image
+from pathlib import Path
 
-# 4x4 Atlas, jeder Block 16x16
-atlas = Image.new('RGB', (64, 64))
-draw = ImageDraw.Draw(atlas)
+SRC = Path(__file__).resolve().parents[2] / "Textures/assets/minecraft/textures/block"
+TILE = 16
+GRID = 16           # 16x16 Tiles
+SIZE = TILE * GRID  # 256 px
 
-# Grass top (0,0)
-draw.rectangle([0, 0, 15, 15], fill=(86, 125, 70))
+atlas = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
 
-# Dirt (16,0)
-draw.rectangle([16, 0, 31, 15], fill=(139, 115, 85))
+TILES = {
+    (0, 0): "grass_block_top.png",
+    (1, 0): "grass_block_side.png",
+    (2, 0): "dirt.png",
+    (3, 0): "stone.png",
+    (4, 0): "oak_log.png",
+    (5, 0): "oak_log_top.png",
+    (6, 0): "oak_leaves.png",
+    (7, 0): "sand.png",
+}
 
-# Grass side (32,0)
-draw.rectangle([32, 0, 47, 15], fill=(107, 142, 93))
+for (col, row), filename in TILES.items():
+    src_path = SRC / filename
+    tex = Image.open(src_path).convert('RGBA')
+    if tex.size != (TILE, TILE):
+        tex = tex.crop((0, 0, TILE, TILE))
+    atlas.paste(tex, (col * TILE, row * TILE))
 
-# Sand (48,0)
-draw.rectangle([48, 0, 63, 15], fill=(224, 197, 153))
+# Water (erster Frame aus dem animierten 16x512-Strip)
+water = Image.open(SRC / "water_still.png").convert('RGBA').crop((0, 0, TILE, TILE))
+atlas.paste(water, (8 * TILE, 0))
 
-# Stone (0,16)
-draw.rectangle([0, 16, 15, 31], fill=(119, 119, 119))
-
-# Wood (16,16)
-draw.rectangle([16, 16, 31, 31], fill=(139, 111, 71))
-
-# Leaves (32,16)
-draw.rectangle([32, 16, 47, 31], fill=(74, 124, 60))
-
-# Water (48,16)
-draw.rectangle([48, 16, 63, 31], fill=(59, 90, 140))
-
-atlas.save('atlas.png')
-print("Atlas created successfully!")
+atlas.save(Path(__file__).parent / "atlas.png")
+print(f"Atlas {SIZE}x{SIZE} mit {len(TILES) + 1} Tiles erstellt.")

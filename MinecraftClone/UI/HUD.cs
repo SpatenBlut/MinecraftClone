@@ -24,7 +24,7 @@ public class HUD
         { false, false, false, true,  true,  false, false, false },
     };
 
-    private const float HeartPixelSize = 2.2f;                                 // Jedes "Pixel" = 2.2×2.2 Bildschirmpixel (~10% grösser)
+    private const float HeartPixelSize = 3.0f;                                 // Jedes "Pixel" = 3×3 Bildschirmpixel
     private const int HeartCols       = 8;
     private const int HeartRows       = 6;
     private static readonly int HeartW = (int)(HeartCols * HeartPixelSize);   // ~17px
@@ -56,7 +56,7 @@ public class HUD
         DrawHotbar(spriteBatch, inventory, screenWidth, screenHeight, out int hotbarY, out int hotbarStartX);
         DrawHearts(spriteBatch, player, hotbarStartX, hotbarY);
         DrawFps(spriteBatch, screenWidth);
-        DrawDebugInfo(spriteBatch, player, 10, screenHeight - 100);
+        DrawDebugInfo(spriteBatch, player, 10, 10);
 
         spriteBatch.End();
     }
@@ -81,7 +81,7 @@ public class HUD
     private void DrawHotbar(SpriteBatch spriteBatch, Inventory inventory,
         int screenWidth, int screenHeight, out int hotbarY, out int hotbarStartX)
     {
-        const int slotSize  = 56;
+        const int slotSize  = 62;
         const int spacing   = 5;
         const int slots     = 9;
 
@@ -114,10 +114,7 @@ public class HUD
                     Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
             }
 
-            // Slot-Nummer
-            spriteBatch.DrawString(_font, (i + 1).ToString(),
-                new Vector2(x + 4, hotbarY + 3),
-                Color.White, 0f, Vector2.Zero, 0.55f, SpriteEffects.None, 0f);
+
         }
     }
 

@@ -17,10 +17,10 @@ public class Camera
 
     private float _yaw;
     private float _pitch;
-    private float _mouseSensitivity = 0.0012f;
+    private float _mouseSensitivity = 0.0006f;
 
-    private const float NormalFov  = 70f;
-    private const float SprintFov  = 80f;   // +10° beim Sprinten wie Minecraft
+    private const float NormalFov  = 75f;
+    private const float SprintFov  = 85f;
     private const float FovSpeed   = 8f;    // Grad pro Sekunde (smooth wie Minecraft)
 
     private float _currentFov = NormalFov;

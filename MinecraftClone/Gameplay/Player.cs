@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -55,7 +56,7 @@ public class Player
 
     // Smooth Sneak-Übergang (nicht instant wie in Minecraft)
     private float _smoothEyeHeight = NormalEyeHeight;
-    private const float EyeHeightSpeed = 10f; // Einheiten/Sekunde
+    private const float EyeHeightSpeed = 4f; // Einheiten/Sekunde
 
     public Player(Vector3 startPosition, float aspectRatio)
     {
@@ -114,9 +115,9 @@ public class Player
         // Augenhöhe smooth Richtung Ziel bewegen (Sneak-Übergang wie Minecraft)
         float step = EyeHeightSpeed * deltaTime;
         if (_smoothEyeHeight < _currentEyeHeight)
-            _smoothEyeHeight = MathF.Min(_smoothEyeHeight + step, _currentEyeHeight);
+            _smoothEyeHeight = Math.Min(_smoothEyeHeight + step, _currentEyeHeight);
         else if (_smoothEyeHeight > _currentEyeHeight)
-            _smoothEyeHeight = MathF.Max(_smoothEyeHeight - step, _currentEyeHeight);
+            _smoothEyeHeight = Math.Max(_smoothEyeHeight - step, _currentEyeHeight);
 
         Camera.IsSprinting = _isSprinting;
         Camera.Position = RenderPosition + new Vector3(0, _smoothEyeHeight, 0);
@@ -220,8 +221,6 @@ public class Player
         }
 
         // --- Springen ---
-        // Nutzt _isGrounded (Physics-State) statt einer frischen Probe – verhindert
-        // das kurze Velocity-Setzen wenn der Spieler knapp über dem Boden ist.
         if (_jumpBuffered && !_isSneaking)
         {
             if (_isGrounded && _jumpCooldown <= 0)
