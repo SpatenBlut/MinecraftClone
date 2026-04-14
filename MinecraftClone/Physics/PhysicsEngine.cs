@@ -70,14 +70,33 @@ public class PhysicsEngine
             newGrounded = false;
         }
 
+        const float StepHeight = 0.6f;
+
         // X-Achse
         position.X += movement.X;
         AABB xBox = AABB.FromPosition(position, width, height, depth);
 
         if (CheckCollisionWithAABB(xBox, world))
         {
-            position.X -= movement.X;
-            newVelocity.X = 0;
+            bool stepped = false;
+            if (isGrounded && movement.X != 0)
+            {
+                for (float step = 0.1f; step <= StepHeight; step += 0.1f)
+                {
+                    Vector3 testPos = new Vector3(position.X, position.Y + step, position.Z);
+                    if (!CheckCollisionWithAABB(AABB.FromPosition(testPos, width, height, depth), world))
+                    {
+                        position.Y += step;
+                        stepped = true;
+                        break;
+                    }
+                }
+            }
+            if (!stepped)
+            {
+                position.X -= movement.X;
+                newVelocity.X = 0;
+            }
         }
 
         // Z-Achse
@@ -86,8 +105,25 @@ public class PhysicsEngine
 
         if (CheckCollisionWithAABB(zBox, world))
         {
-            position.Z -= movement.Z;
-            newVelocity.Z = 0;
+            bool stepped = false;
+            if (isGrounded && movement.Z != 0)
+            {
+                for (float step = 0.1f; step <= StepHeight; step += 0.1f)
+                {
+                    Vector3 testPos = new Vector3(position.X, position.Y + step, position.Z);
+                    if (!CheckCollisionWithAABB(AABB.FromPosition(testPos, width, height, depth), world))
+                    {
+                        position.Y += step;
+                        stepped = true;
+                        break;
+                    }
+                }
+            }
+            if (!stepped)
+            {
+                position.Z -= movement.Z;
+                newVelocity.Z = 0;
+            }
         }
 
         return position;

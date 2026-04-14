@@ -29,6 +29,10 @@ public class Game1 : Game
     private KeyboardState _lastKeyState;
     private MouseState _lastMouseState;
 
+    // 20 TPS Tick-System (wie Minecraft)
+    private const double TickInterval = 1.0 / 20.0; // 50ms pro Tick
+    private double _tickAccumulator = 0.0;
+
     public Game1()
     {
         _graphics = new GraphicsDeviceManager(this);
@@ -42,6 +46,9 @@ public class Game1 : Game
         _graphics.ApplyChanges();
 
         IsMouseVisible = false;
+
+        // Rendering läuft uncapped, Logik läuft via manuellem 20-TPS-Accumulator
+        IsFixedTimeStep = false;
     }
 
     protected override void Initialize()
@@ -102,12 +109,29 @@ public class Game1 : Game
         if (keyState.IsKeyDown(Keys.Escape))
             Exit();
 
-        // Spieler-Update
-        _player.Update(gameTime, _world);
-        _player.UpdateCamera(gameTime, GraphicsDevice);
+        // Input jeden Frame pollen (damit kurze Tastendrücke zwischen Ticks nicht verloren gehen)
+        _player.PollInput();
 
-        // Inventory-Update
-        _inventory.Update();
+        // 20-TPS Tick-Accumulator (wie Minecraft)
+        _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
+
+        int ticksThisFrame = 0;
+        while (_tickAccumulator >= TickInterval && ticksThisFrame < 5)
+        {
+            _player.SaveTickState();
+            _player.Tick((float)TickInterval, _world);
+            _inventory.Update();
+            _tickAccumulator -= TickInterval;
+            ticksThisFrame++;
+        }
+
+        // Interpolations-Alpha (wie weit sind wir zwischen letztem und nächstem Tick)
+        float alpha = (float)(_tickAccumulator / TickInterval);
+        float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        _player.SetRenderPosition(alpha, deltaTime);
+
+        // Kamera (Mouse-Look) läuft jeden Frame für flüssige Rotation
+        _player.UpdateCamera(gameTime, GraphicsDevice);
 
         // Block abbauen (linke Maustaste) - nur bei neuem Klick
         var mouseState = Mouse.GetState();

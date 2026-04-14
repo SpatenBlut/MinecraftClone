@@ -30,7 +30,7 @@ public class Player
     private const float WalkSpeed    = 4.317f;   // 0.21585 b/tick * 20
     private const float SprintSpeed  = 5.612f;   // 0.2806  b/tick * 20
     private const float SneakSpeed   = 1.295f;   // 0.065   b/tick * 20
-    private const float JumpStrength = 8.5f;     // 0.42    b/tick * 20 (+ vertical drag angepasst)
+    private const float JumpStrength = 9.5f;     // angepasst für ~1.25 Blöcke Sprunghöhe (Minecraft-Standard)
     private const float JumpCooldownTime = 0.1f;
 
     // Spieler-Dimensionen
@@ -43,25 +43,39 @@ public class Player
 
     private MouseState _lastMouseState;
     private KeyboardState _lastKeyState;
+    private KeyboardState _lastFrameKeyState;
+
+    // Gebufferte Inputs — werden jeden Frame gesetzt, beim nächsten Tick konsumiert
+    private bool _jumpBuffered = false;
+
+    // Für Render-Interpolation zwischen Ticks
+    public Vector3 PreviousPosition;
+    public Vector3 RenderPosition;
+    private float _currentEyeHeight = NormalEyeHeight;
+
+    // Smooth Sneak-Übergang (nicht instant wie in Minecraft)
+    private float _smoothEyeHeight = NormalEyeHeight;
+    private const float EyeHeightSpeed = 10f; // Einheiten/Sekunde
 
     public Player(Vector3 startPosition, float aspectRatio)
     {
         Position = startPosition;
+        PreviousPosition = startPosition;
+        RenderPosition = startPosition;
         Camera = new Camera(startPosition + new Vector3(0, NormalEyeHeight, 0), aspectRatio);
         CollisionBox = new AABB(Vector3.Zero, PlayerWidth, NormalHeight, PlayerDepth);
         Velocity = Vector3.Zero;
     }
 
-    public void Update(GameTime gameTime, World.World world)
+    // Wird exakt 20x pro Sekunde aufgerufen (fixer 50ms Tick wie Minecraft)
+    public void Tick(float deltaTime, World.World world)
     {
-        float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-
         if (_jumpCooldown > 0)
             _jumpCooldown -= deltaTime;
 
         HandleInput(deltaTime, world);
 
-        // Schleich-Kantenschutz: verhindert Abstürze von Kanten beim Schleichen
+        // Schleich-Kantenschutz
         if (_isSneaking && _isGrounded && (Velocity.X != 0f || Velocity.Z != 0f))
         {
             Vector3 testPos = Position + new Vector3(Velocity.X * deltaTime, 0f, Velocity.Z * deltaTime);
@@ -79,14 +93,42 @@ public class Player
             _isGrounded, out _isGrounded, ref newVelocity, PlayerWidth, currentHeight, PlayerDepth);
         Velocity = newVelocity;
 
-        // Sprint abbrechen wenn Wand getroffen (horizontale Kollision stoppte Velocity)
         if (_isSprinting && Velocity.X == 0f && Velocity.Z == 0f && _isGrounded)
             _isSprinting = false;
 
-        // Kollisionsbox und Augenhöhe je nach Zustand aktualisieren
         CollisionBox = new AABB(Vector3.Zero, PlayerWidth, currentHeight, PlayerDepth);
-        float eyeHeight = _isSneaking ? SneakEyeHeight : NormalEyeHeight;
-        Camera.Position = Position + new Vector3(0, eyeHeight, 0);
+        _currentEyeHeight = _isSneaking ? SneakEyeHeight : NormalEyeHeight;
+    }
+
+    // Speichert den Zustand vor dem Tick für Interpolation
+    public void SaveTickState()
+    {
+        PreviousPosition = Position;
+    }
+
+    // Setzt die interpolierte Render-Position (alpha = 0..1 zwischen letztem und aktuellem Tick)
+    public void SetRenderPosition(float alpha, float deltaTime)
+    {
+        RenderPosition = Vector3.Lerp(PreviousPosition, Position, alpha);
+
+        // Augenhöhe smooth Richtung Ziel bewegen (Sneak-Übergang wie Minecraft)
+        float step = EyeHeightSpeed * deltaTime;
+        if (_smoothEyeHeight < _currentEyeHeight)
+            _smoothEyeHeight = MathF.Min(_smoothEyeHeight + step, _currentEyeHeight);
+        else if (_smoothEyeHeight > _currentEyeHeight)
+            _smoothEyeHeight = MathF.Max(_smoothEyeHeight - step, _currentEyeHeight);
+
+        Camera.IsSprinting = _isSprinting;
+        Camera.Position = RenderPosition + new Vector3(0, _smoothEyeHeight, 0);
+    }
+
+    // Jeden Frame aufrufen — buffert kurze Tastendrücke die zwischen Ticks liegen könnten
+    public void PollInput()
+    {
+        var keyState = Keyboard.GetState();
+        if (keyState.IsKeyDown(Keys.Space) && _lastFrameKeyState.IsKeyUp(Keys.Space))
+            _jumpBuffered = true;
+        _lastFrameKeyState = keyState;
     }
 
     public void UpdateCamera(GameTime gameTime, GraphicsDevice graphicsDevice)
@@ -180,7 +222,7 @@ public class Player
         // --- Springen ---
         // Nutzt _isGrounded (Physics-State) statt einer frischen Probe – verhindert
         // das kurze Velocity-Setzen wenn der Spieler knapp über dem Boden ist.
-        if (keyState.IsKeyDown(Keys.Space) && _lastKeyState.IsKeyUp(Keys.Space) && !_isSneaking)
+        if (_jumpBuffered && !_isSneaking)
         {
             if (_isGrounded && _jumpCooldown <= 0)
             {
@@ -188,6 +230,7 @@ public class Player
                 _isGrounded = false;
                 _jumpCooldown = JumpCooldownTime;
             }
+            _jumpBuffered = false;
         }
 
         _lastKeyState = keyState;
@@ -236,7 +279,10 @@ public class Player
                 new Vector3(blockPos.X + 1, blockPos.Y + 1, blockPos.Z + 1)
             );
 
-            AABB playerBox = AABB.FromPosition(Position, PlayerWidth, NormalHeight, PlayerDepth);
+            // Konsistente Basis: Kamera-Position minus Augenhöhe (gleiche Basis wie der Raycast)
+            Vector3 basePos = Camera.Position - new Vector3(0, _currentEyeHeight, 0);
+            float currentHeight = _isSneaking ? SneakHeight : NormalHeight;
+            AABB playerBox = AABB.FromPosition(basePos, PlayerWidth, currentHeight, PlayerDepth);
 
             if (!blockBox.Intersects(playerBox))
             {

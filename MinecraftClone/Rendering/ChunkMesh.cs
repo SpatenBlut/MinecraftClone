@@ -7,7 +7,7 @@ namespace MinecraftClone.Rendering;
 
 public class ChunkMesh
 {
-    private List<VertexPositionTextureNormal> _vertices;
+    private List<VertexPositionColorTexture> _vertices;
     private List<int> _indices;
     private VertexBuffer _vertexBuffer;
     private IndexBuffer _indexBuffer;
@@ -19,7 +19,7 @@ public class ChunkMesh
     public ChunkMesh(GraphicsDevice graphicsDevice)
     {
         _graphicsDevice = graphicsDevice;
-        _vertices = new List<VertexPositionTextureNormal>();
+        _vertices = new List<VertexPositionColorTexture>();
         _indices = new List<int>();
     }
 
@@ -67,13 +67,29 @@ public class ChunkMesh
             AddFace(x, y, z, FaceDirection.Back, block);
     }
 
+    // Minecraft-typische Flächenhelligkeit (baked face shading, kein dynamisches Licht)
+    private static Color GetFaceColor(FaceDirection direction)
+    {
+        byte b = direction switch
+        {
+            FaceDirection.Top    => 255,           // 1.00 — volle Tageshelligkeit
+            FaceDirection.Front  => 204,           // 0.80
+            FaceDirection.Back   => 204,           // 0.80
+            FaceDirection.Left   => 153,           // 0.60
+            FaceDirection.Right  => 153,           // 0.60
+            FaceDirection.Bottom => 127,           // 0.50 — dunkel wie Minecraft Unterseite
+            _                    => 255
+        };
+        return new Color(b, b, b);
+    }
+
     private void AddFace(int x, int y, int z, FaceDirection direction, BlockType block)
     {
         int vertexOffset = _vertices.Count;
         Vector2 texCoord = GetTextureCoordinates(block, direction);
+        Color faceColor = GetFaceColor(direction);
 
         Vector3[] positions;
-        Vector3 normal;
 
         switch (direction)
         {
@@ -85,7 +101,6 @@ public class ChunkMesh
                     new Vector3(x + 1, y + 1, z + 1),
                     new Vector3(x, y + 1, z + 1)
                 };
-                normal = Vector3.Up;
                 break;
 
             case FaceDirection.Bottom:
@@ -96,7 +111,6 @@ public class ChunkMesh
                     new Vector3(x + 1, y, z),
                     new Vector3(x, y, z)
                 };
-                normal = Vector3.Down;
                 break;
 
             case FaceDirection.Front:
@@ -107,7 +121,6 @@ public class ChunkMesh
                     new Vector3(x + 1, y + 1, z + 1),
                     new Vector3(x + 1, y, z + 1)
                 };
-                normal = Vector3.Forward;
                 break;
 
             case FaceDirection.Back:
@@ -118,7 +131,6 @@ public class ChunkMesh
                     new Vector3(x, y + 1, z),
                     new Vector3(x, y, z)
                 };
-                normal = Vector3.Backward;
                 break;
 
             case FaceDirection.Left:
@@ -129,7 +141,6 @@ public class ChunkMesh
                     new Vector3(x, y + 1, z + 1),
                     new Vector3(x, y, z + 1)
                 };
-                normal = Vector3.Left;
                 break;
 
             case FaceDirection.Right:
@@ -140,7 +151,6 @@ public class ChunkMesh
                     new Vector3(x + 1, y + 1, z),
                     new Vector3(x + 1, y, z)
                 };
-                normal = Vector3.Right;
                 break;
 
             default:
@@ -149,10 +159,10 @@ public class ChunkMesh
 
         float texSize = 0.25f; // 4x4 Texture Atlas
 
-        _vertices.Add(new VertexPositionTextureNormal(positions[0], texCoord + new Vector2(0, texSize), normal));
-        _vertices.Add(new VertexPositionTextureNormal(positions[1], texCoord + new Vector2(0, 0), normal));
-        _vertices.Add(new VertexPositionTextureNormal(positions[2], texCoord + new Vector2(texSize, 0), normal));
-        _vertices.Add(new VertexPositionTextureNormal(positions[3], texCoord + new Vector2(texSize, texSize), normal));
+        _vertices.Add(new VertexPositionColorTexture(positions[0], faceColor, texCoord + new Vector2(0, texSize)));
+        _vertices.Add(new VertexPositionColorTexture(positions[1], faceColor, texCoord + new Vector2(0, 0)));
+        _vertices.Add(new VertexPositionColorTexture(positions[2], faceColor, texCoord + new Vector2(texSize, 0)));
+        _vertices.Add(new VertexPositionColorTexture(positions[3], faceColor, texCoord + new Vector2(texSize, texSize)));
 
         _indices.Add(vertexOffset);
         _indices.Add(vertexOffset + 1);
@@ -187,7 +197,7 @@ public class ChunkMesh
         _vertexBuffer?.Dispose();
         _indexBuffer?.Dispose();
 
-        _vertexBuffer = new VertexBuffer(_graphicsDevice, VertexPositionTextureNormal.VertexDeclaration,
+        _vertexBuffer = new VertexBuffer(_graphicsDevice, VertexPositionColorTexture.VertexDeclaration,
             _vertices.Count, BufferUsage.WriteOnly);
         _vertexBuffer.SetData(_vertices.ToArray());
 

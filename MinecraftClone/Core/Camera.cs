@@ -17,7 +17,14 @@ public class Camera
 
     private float _yaw;
     private float _pitch;
-    private float _mouseSensitivity = 0.002f;
+    private float _mouseSensitivity = 0.0012f;
+
+    private const float NormalFov  = 70f;
+    private const float SprintFov  = 80f;   // +10° beim Sprinten wie Minecraft
+    private const float FovSpeed   = 8f;    // Grad pro Sekunde (smooth wie Minecraft)
+
+    private float _currentFov = NormalFov;
+    public bool IsSprinting { private get; set; }
 
     private bool _firstMouseMove = true;
 
@@ -63,6 +70,14 @@ public class Camera
         // Maus zurück in die Mitte setzen
         Mouse.SetPosition(screenCenterX, screenCenterY);
 
+        // FOV smooth anpassen (Sprint-Effekt wie Minecraft)
+        float targetFov = IsSprinting ? SprintFov : NormalFov;
+        _currentFov += (targetFov - _currentFov) * MathHelper.Clamp(FovSpeed * deltaTime, 0f, 1f);
+        ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(
+            MathHelper.ToRadians(_currentFov),
+            graphicsDevice.Viewport.Width / (float)graphicsDevice.Viewport.Height,
+            0.1f, 1000f);
+
         UpdateVectors();
         UpdateViewMatrix();
     }
@@ -88,7 +103,7 @@ public class Camera
     public void UpdateProjection(float aspectRatio)
     {
         ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(
-            MathHelper.ToRadians(70f),
+            MathHelper.ToRadians(_currentFov),
             aspectRatio,
             0.1f,
             1000f

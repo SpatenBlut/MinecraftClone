@@ -16,17 +16,8 @@ public class BasicEffect3D
     {
         _effect = new BasicEffect(graphicsDevice);
         _effect.TextureEnabled = true;
-        _effect.LightingEnabled = true;
-        _effect.EnableDefaultLighting();
-        _effect.PreferPerPixelLighting = false;
-
-        // Ambient light
-        _effect.AmbientLightColor = new Vector3(0.6f, 0.6f, 0.6f);
-
-        // Directional light
-        _effect.DirectionalLight0.Enabled = true;
-        _effect.DirectionalLight0.Direction = Vector3.Normalize(new Vector3(0.5f, -1f, 0.5f));
-        _effect.DirectionalLight0.DiffuseColor = new Vector3(0.4f, 0.4f, 0.4f);
+        _effect.VertexColorEnabled = true;  // Face-Helligkeit ist in Vertex-Farbe gebacken
+        _effect.LightingEnabled = false;    // Kein dynamisches Licht — wie Minecraft
     }
 
     public void Apply()
