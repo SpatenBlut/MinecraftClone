@@ -18,6 +18,7 @@ public class Player
     public float Health { get; set; } = 20f;
     public const float MaxHealth = 20f;
     public bool IsAlive => Health > 0;
+    public Vector3 SpawnPoint = new Vector3(32f, 10f, 32f);
 
     public bool IsSprinting => _isSprinting;
     public bool IsSneaking => _isSneaking;
@@ -26,6 +27,7 @@ public class Player
     private bool _isSprinting;
     private bool _isSneaking;
     private float _jumpCooldown = 0f;
+    private float _fallDistance = 0f;
 
     // Minecraft-genaue Bewegungswerte (Blöcke/Sekunde)
     private const float WalkSpeed    = 4.317f;   // 0.21585 b/tick * 20
@@ -89,10 +91,41 @@ public class Player
 
         float currentHeight = _isSneaking ? SneakHeight : NormalHeight;
 
+        bool wasGrounded = _isGrounded;
+        float posYBefore = Position.Y;
+
         Vector3 newVelocity = Velocity;
         Position = PhysicsEngine.ApplyPhysics(Position, newVelocity, CollisionBox, world, deltaTime,
             _isGrounded, out _isGrounded, ref newVelocity, PlayerWidth, currentHeight, PlayerDepth);
         Velocity = newVelocity;
+
+        // ── Falldamage (Minecraft-Java-Formel: Schaden = ceil(Fallhöhe - 3)) ──────
+        float dy = posYBefore - Position.Y;   // positiv beim Fallen
+        if (!wasGrounded && _isGrounded)
+        {
+            // Gerade gelandet
+            if (dy > 0f) _fallDistance += dy;
+            int bx = (int)MathF.Floor(Position.X);
+            int by = (int)MathF.Floor(Position.Y);
+            int bz = (int)MathF.Floor(Position.Z);
+            bool inWater = world.GetBlock(bx, by, bz) == BlockType.Water
+                        || world.GetBlock(bx, by + 1, bz) == BlockType.Water;
+            if (!inWater && _fallDistance > 3f)
+            {
+                TakeDamage(MathF.Ceiling(_fallDistance - 3f));
+                if (!IsAlive) Respawn();
+            }
+            _fallDistance = 0f;
+        }
+        else if (!_isGrounded && dy > 0f)
+        {
+            _fallDistance += dy;              // akkumuliert während des Falls
+        }
+        else if (wasGrounded && !_isGrounded)
+        {
+            _fallDistance = 0f;              // Boden gerade verlassen (Sprung / Kante)
+        }
+        // ─────────────────────────────────────────────────────────────────────────
 
         if (_isSprinting && Velocity.X == 0f && Velocity.Z == 0f && _isGrounded)
             _isSprinting = false;
@@ -228,6 +261,7 @@ public class Player
                 Velocity.Y = JumpStrength;
                 _isGrounded = false;
                 _jumpCooldown = JumpCooldownTime;
+                _fallDistance = 0f;
             }
             _jumpBuffered = false;
         }
@@ -250,19 +284,32 @@ public class Player
             Health = MaxHealth;
     }
 
-    public bool TryBreakBlock(World.World world, out Vector3 brokenBlock)
+    public bool TryBreakBlock(World.World world, out Vector3 brokenBlock, out BlockType brokenBlockType)
     {
         brokenBlock = Vector3.Zero;
+        brokenBlockType = BlockType.Air;
 
         if (Raycast.CastRay(world, Camera.Position, Camera.Forward, 5f,
             out Vector3 hitBlock, out Vector3 adjacentBlock))
         {
+            brokenBlockType = world.GetBlock((int)hitBlock.X, (int)hitBlock.Y, (int)hitBlock.Z);
             world.SetBlock((int)hitBlock.X, (int)hitBlock.Y, (int)hitBlock.Z, BlockType.Air);
             brokenBlock = hitBlock;
             return true;
         }
 
         return false;
+    }
+
+    public void Respawn()
+    {
+        Position = SpawnPoint;
+        PreviousPosition = SpawnPoint;
+        RenderPosition = SpawnPoint;
+        Velocity = Vector3.Zero;
+        _fallDistance = 0f;
+        _isGrounded = false;
+        Health = MaxHealth;
     }
 
     public bool TryPlaceBlock(World.World world, BlockType blockType, out Vector3 placedBlock)

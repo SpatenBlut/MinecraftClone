@@ -21,7 +21,7 @@ public class Game1 : Game
     private ChunkMesh _chunkMesh;
     private HUD _hud;
 
-    private BasicEffect3D _basicEffect;
+    private BlockEffect _basicEffect;
     private Texture2D _blockAtlas;
     private SpriteFont _font;
 
@@ -50,6 +50,7 @@ public class Game1 : Game
         _graphics.HardwareModeSwitch = true;
         _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+        _graphics.SynchronizeWithVerticalRetrace = false;
         _graphics.ApplyChanges();
 
         IsMouseVisible = false;
@@ -83,7 +84,7 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
-        _basicEffect = new BasicEffect3D(GraphicsDevice);
+        _basicEffect = new BlockEffect(Content.Load<Effect>("BasicShader"));
         _blockAtlas  = Content.Load<Texture2D>("Textures/atlas");
         _sunTexture  = Content.Load<Texture2D>("Textures/sun");
         _font        = Content.Load<SpriteFont>("Font");
@@ -102,6 +103,8 @@ public class Game1 : Game
 
         if (keyState.IsKeyDown(Keys.Escape))
             Exit();
+
+        if (!IsActive) { base.Update(gameTime); return; }
 
         _player.PollInput();
 
@@ -176,18 +179,23 @@ public class Game1 : Game
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState   = RasterizerState.CullCounterClockwise;
 
-        _basicEffect.World      = Matrix.Identity;
-        _basicEffect.View       = _player.Camera.ViewMatrix;
-        _basicEffect.Projection = _player.Camera.ProjectionMatrix;
-        _basicEffect.Texture    = _blockAtlas;
-
-        // Fog zur Horizont-Farbe hin (Minecraft Render-Distance-Effekt)
-        _basicEffect.FogEnabled = true;
-        _basicEffect.FogColor   = SkyHorizon.ToVector3();
-        _basicEffect.FogStart   = 40f;
-        _basicEffect.FogEnd     = 62f;
-
+        _basicEffect.World          = Matrix.Identity;
+        _basicEffect.View           = _player.Camera.ViewMatrix;
+        _basicEffect.Projection     = _player.Camera.ProjectionMatrix;
+        _basicEffect.Texture        = _blockAtlas;
+        _basicEffect.CameraPosition = _player.Camera.Position;
+        // Sonne — leicht seitlich von oben (Nachmittags-Feeling)
+        _basicEffect.SunDirection   = Vector3.Normalize(new Vector3(0.4f, 1.0f, 0.3f));
+        _basicEffect.SunColor       = new Vector3(0.55f, 0.50f, 0.40f);   // warmes Gold, reduziert da Ambient heller
+        // Hemisphere-Ambient: kühler Himmel oben, warme Erde unten — bewusst hell damit Seitenflächen sichtbar bleiben
+        _basicEffect.AmbientSky     = new Vector3(0.70f, 0.75f, 0.90f);
+        _basicEffect.AmbientGround  = new Vector3(0.32f, 0.28f, 0.22f);
+        // Nebel Richtung Horizont-Blau
+        _basicEffect.FogColor       = SkyHorizon.ToVector3();
+        _basicEffect.FogStart       = 40f;
+        _basicEffect.FogEnd         = 62f;
         _basicEffect.Apply();
+
         _chunkMesh.Draw();
 
         // 4) HUD

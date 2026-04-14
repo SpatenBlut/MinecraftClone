@@ -27,6 +27,8 @@ public class Camera
     public bool IsSprinting { private get; set; }
 
     private bool _firstMouseMove = true;
+    private int  _lastMouseX;
+    private int  _lastMouseY;
 
     public Camera(Vector3 position, float aspectRatio)
     {
@@ -57,18 +59,29 @@ public class Camera
         if (_firstMouseMove)
         {
             Mouse.SetPosition(screenCenterX, screenCenterY);
+            // Direkt nach SetPosition nochmal lesen — speichert die echte Position
+            // die das OS gesetzt hat (nicht die gewünschte), damit kein Delta-Fehler entsteht
+            var s = Mouse.GetState();
+            _lastMouseX = s.X;
+            _lastMouseY = s.Y;
             _firstMouseMove = false;
             return;
         }
-        float deltaX = mouseState.X - screenCenterX;
-        float deltaY = mouseState.Y - screenCenterY;
+
+        // Delta gegen LETZTE BEKANNTE Position berechnen (nicht gegen berechnetes Zentrum)
+        // → verhindert Drift bei sehr hohem FPS wenn SetPosition noch nicht vom OS verarbeitet wurde
+        float deltaX = mouseState.X - _lastMouseX;
+        float deltaY = mouseState.Y - _lastMouseY;
 
         _yaw += deltaX * _mouseSensitivity;
         _pitch -= deltaY * _mouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
-        // Maus zurück in die Mitte setzen
+        // Maus zurück in die Mitte setzen, dann sofort auslesen
         Mouse.SetPosition(screenCenterX, screenCenterY);
+        var warped = Mouse.GetState();
+        _lastMouseX = warped.X;
+        _lastMouseY = warped.Y;
 
         // FOV smooth anpassen (Sprint-Effekt wie Minecraft)
         float targetFov = IsSprinting ? SprintFov : NormalFov;
@@ -98,6 +111,11 @@ public class Camera
     private void UpdateViewMatrix()
     {
         ViewMatrix = Matrix.CreateLookAt(Position, Position + Forward, Up);
+    }
+
+    public void ResetMouseLock()
+    {
+        _firstMouseMove = true;
     }
 
     public void UpdateProjection(float aspectRatio)

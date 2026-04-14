@@ -7,20 +7,20 @@ namespace MinecraftClone.Rendering;
 
 public class ChunkMesh
 {
-    private List<VertexPositionColorTexture> _vertices;
-    private List<int> _indices;
-    private VertexBuffer _vertexBuffer;
-    private IndexBuffer _indexBuffer;
-    private GraphicsDevice _graphicsDevice;
+    private List<BlockVertex> _vertices;
+    private List<int>         _indices;
+    private VertexBuffer      _vertexBuffer;
+    private IndexBuffer       _indexBuffer;
+    private GraphicsDevice    _graphicsDevice;
 
-    public int TriangleCount => _indices.Count / 3;
-    public bool IsEmpty => _vertices.Count == 0;
+    public int  TriangleCount => _indices.Count / 3;
+    public bool IsEmpty       => _vertices.Count == 0;
 
     public ChunkMesh(GraphicsDevice graphicsDevice)
     {
         _graphicsDevice = graphicsDevice;
-        _vertices = new List<VertexPositionColorTexture>();
-        _indices = new List<int>();
+        _vertices       = new List<BlockVertex>();
+        _indices        = new List<int>();
     }
 
     public void Build(World.World world)
@@ -28,18 +28,13 @@ public class ChunkMesh
         _vertices.Clear();
         _indices.Clear();
 
-        for (int x = 0; x < world.Width; x++)
+        for (int x = 0; x < world.Width;  x++)
+        for (int y = 0; y < world.Height; y++)
+        for (int z = 0; z < world.Depth;  z++)
         {
-            for (int y = 0; y < world.Height; y++)
-            {
-                for (int z = 0; z < world.Depth; z++)
-                {
-                    BlockType block = world.GetBlock(x, y, z);
-                    if (block == BlockType.Air) continue;
-
-                    AddBlockFaces(world, x, y, z, block);
-                }
-            }
+            BlockType block = world.GetBlock(x, y, z);
+            if (block == BlockType.Air) continue;
+            AddBlockFaces(world, x, y, z, block);
         }
 
         UpdateBuffers();
@@ -47,119 +42,104 @@ public class ChunkMesh
 
     private void AddBlockFaces(World.World world, int x, int y, int z, BlockType block)
     {
-        // Nur sichtbare Faces rendern
-        if (world.GetBlock(x, y + 1, z) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Top, block);
-
-        if (world.GetBlock(x, y - 1, z) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Bottom, block);
-
-        if (world.GetBlock(x + 1, y, z) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Right, block);
-
-        if (world.GetBlock(x - 1, y, z) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Left, block);
-
-        if (world.GetBlock(x, y, z + 1) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Front, block);
-
-        if (world.GetBlock(x, y, z - 1) == BlockType.Air)
-            AddFace(x, y, z, FaceDirection.Back, block);
+        if (world.GetBlock(x, y + 1, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Top,    block);
+        if (world.GetBlock(x, y - 1, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Bottom, block);
+        if (world.GetBlock(x + 1, y, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Right,  block);
+        if (world.GetBlock(x - 1, y, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Left,   block);
+        if (world.GetBlock(x, y, z + 1) == BlockType.Air) AddFace(x, y, z, FaceDirection.Front,  block);
+        if (world.GetBlock(x, y, z - 1) == BlockType.Air) AddFace(x, y, z, FaceDirection.Back,   block);
     }
 
-    // Minecraft-typische Flächenhelligkeit (baked face shading, kein dynamisches Licht)
-    private static Color GetFaceColor(BlockType block, FaceDirection direction)
+    // Biom-Tint: Gras-Oberseite und Blätter bekommen Grün, alles andere weiß (= unverändert)
+    private static Color GetBiomeTint(BlockType block, FaceDirection direction)
     {
-        byte b = direction switch
-        {
-            FaceDirection.Top    => 255,           // 1.00 — volle Tageshelligkeit
-            FaceDirection.Front  => 204,           // 0.80
-            FaceDirection.Back   => 204,           // 0.80
-            FaceDirection.Left   => 153,           // 0.60
-            FaceDirection.Right  => 153,           // 0.60
-            FaceDirection.Bottom => 127,           // 0.50 — dunkel wie Minecraft Unterseite
-            _                    => 255
-        };
-
-        // Grass top: fixer Plains-Grün-Tint (~#91BD59) wie Minecraft-Biom
         if (block == BlockType.Grass && direction == FaceDirection.Top)
-        {
-            return new Color(
-                (byte)(0x91 * b / 255),
-                (byte)(0xBD * b / 255),
-                (byte)(0x59 * b / 255));
-        }
-
-        return new Color(b, b, b);
+            return new Color(0x91, 0xBD, 0x59);   // Plains-Gras-Grün
+        if (block == BlockType.Leaves)
+            return new Color(0x77, 0xAB, 0x2F);   // Oak-Leaf-Grün
+        return Color.White;
     }
+
+    private static Vector3 GetNormal(FaceDirection direction) => direction switch
+    {
+        FaceDirection.Top    =>  Vector3.Up,
+        FaceDirection.Bottom => -Vector3.Up,
+        FaceDirection.Front  =>  Vector3.UnitZ,
+        FaceDirection.Back   => -Vector3.UnitZ,
+        FaceDirection.Right  =>  Vector3.UnitX,
+        FaceDirection.Left   => -Vector3.UnitX,
+        _                    =>  Vector3.Up
+    };
 
     private void AddFace(int x, int y, int z, FaceDirection direction, BlockType block)
     {
-        int vertexOffset = _vertices.Count;
-        Vector2 texCoord = GetTextureCoordinates(block, direction);
-        Color faceColor = GetFaceColor(block, direction);
+        int     vertexOffset = _vertices.Count;
+        Vector2 texCoord     = GetTextureCoordinates(block, direction);
+        Color   tint         = GetBiomeTint(block, direction);
+        Vector3 normal       = GetNormal(direction);
+
+        float s = 1f / 16f; // ein Kachel-Schritt im 16×16-Atlas
 
         Vector3[] positions;
-
         switch (direction)
         {
             case FaceDirection.Top:
                 positions = new[]
                 {
-                    new Vector3(x, y + 1, z),
+                    new Vector3(x,     y + 1, z),
                     new Vector3(x + 1, y + 1, z),
                     new Vector3(x + 1, y + 1, z + 1),
-                    new Vector3(x, y + 1, z + 1)
+                    new Vector3(x,     y + 1, z + 1)
                 };
                 break;
 
             case FaceDirection.Bottom:
                 positions = new[]
                 {
-                    new Vector3(x, y, z + 1),
+                    new Vector3(x,     y, z + 1),
                     new Vector3(x + 1, y, z + 1),
                     new Vector3(x + 1, y, z),
-                    new Vector3(x, y, z)
+                    new Vector3(x,     y, z)
                 };
                 break;
 
             case FaceDirection.Front:
                 positions = new[]
                 {
-                    new Vector3(x, y, z + 1),
-                    new Vector3(x, y + 1, z + 1),
+                    new Vector3(x,     y,     z + 1),
+                    new Vector3(x,     y + 1, z + 1),
                     new Vector3(x + 1, y + 1, z + 1),
-                    new Vector3(x + 1, y, z + 1)
+                    new Vector3(x + 1, y,     z + 1)
                 };
                 break;
 
             case FaceDirection.Back:
                 positions = new[]
                 {
-                    new Vector3(x + 1, y, z),
+                    new Vector3(x + 1, y,     z),
                     new Vector3(x + 1, y + 1, z),
-                    new Vector3(x, y + 1, z),
-                    new Vector3(x, y, z)
+                    new Vector3(x,     y + 1, z),
+                    new Vector3(x,     y,     z)
                 };
                 break;
 
             case FaceDirection.Left:
                 positions = new[]
                 {
-                    new Vector3(x, y, z),
+                    new Vector3(x, y,     z),
                     new Vector3(x, y + 1, z),
                     new Vector3(x, y + 1, z + 1),
-                    new Vector3(x, y, z + 1)
+                    new Vector3(x, y,     z + 1)
                 };
                 break;
 
             case FaceDirection.Right:
                 positions = new[]
                 {
-                    new Vector3(x + 1, y, z + 1),
+                    new Vector3(x + 1, y,     z + 1),
                     new Vector3(x + 1, y + 1, z + 1),
                     new Vector3(x + 1, y + 1, z),
-                    new Vector3(x + 1, y, z)
+                    new Vector3(x + 1, y,     z)
                 };
                 break;
 
@@ -167,12 +147,10 @@ public class ChunkMesh
                 return;
         }
 
-        float texSize = 1f / 16f; // 16x16 Texture Atlas
-
-        _vertices.Add(new VertexPositionColorTexture(positions[0], faceColor, texCoord + new Vector2(0, texSize)));
-        _vertices.Add(new VertexPositionColorTexture(positions[1], faceColor, texCoord + new Vector2(0, 0)));
-        _vertices.Add(new VertexPositionColorTexture(positions[2], faceColor, texCoord + new Vector2(texSize, 0)));
-        _vertices.Add(new VertexPositionColorTexture(positions[3], faceColor, texCoord + new Vector2(texSize, texSize)));
+        _vertices.Add(new BlockVertex(positions[0], texCoord + new Vector2(0, s), normal, tint));
+        _vertices.Add(new BlockVertex(positions[1], texCoord + new Vector2(0, 0), normal, tint));
+        _vertices.Add(new BlockVertex(positions[2], texCoord + new Vector2(s, 0), normal, tint));
+        _vertices.Add(new BlockVertex(positions[3], texCoord + new Vector2(s, s), normal, tint));
 
         _indices.Add(vertexOffset);
         _indices.Add(vertexOffset + 1);
@@ -184,7 +162,7 @@ public class ChunkMesh
 
     private static Vector2 Tile(int col, int row) => new Vector2(col / 16f, row / 16f);
 
-    private Vector2 GetTextureCoordinates(BlockType block, FaceDirection direction)
+    private static Vector2 GetTextureCoordinates(BlockType block, FaceDirection direction)
     {
         return block switch
         {
@@ -209,7 +187,7 @@ public class ChunkMesh
         _vertexBuffer?.Dispose();
         _indexBuffer?.Dispose();
 
-        _vertexBuffer = new VertexBuffer(_graphicsDevice, VertexPositionColorTexture.VertexDeclaration,
+        _vertexBuffer = new VertexBuffer(_graphicsDevice, BlockVertex.VertexDeclaration,
             _vertices.Count, BufferUsage.WriteOnly);
         _vertexBuffer.SetData(_vertices.ToArray());
 
