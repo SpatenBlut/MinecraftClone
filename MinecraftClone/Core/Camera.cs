@@ -53,7 +53,6 @@ public class Camera
             _firstMouseMove = false;
             return;
         }
-
         float deltaX = mouseState.X - screenCenterX;
         float deltaY = mouseState.Y - screenCenterY;
 
