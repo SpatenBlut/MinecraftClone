@@ -42,15 +42,16 @@ public class ChunkMesh
 
     private void AddBlockFaces(World.World world, int x, int y, int z, BlockType block)
     {
-        if (world.GetBlock(x, y + 1, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Top,    block);
-        if (world.GetBlock(x, y - 1, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Bottom, block);
-        if (world.GetBlock(x + 1, y, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Right,  block);
-        if (world.GetBlock(x - 1, y, z) == BlockType.Air) AddFace(x, y, z, FaceDirection.Left,   block);
-        if (world.GetBlock(x, y, z + 1) == BlockType.Air) AddFace(x, y, z, FaceDirection.Front,  block);
-        if (world.GetBlock(x, y, z - 1) == BlockType.Air) AddFace(x, y, z, FaceDirection.Back,   block);
+        if (world.GetBlock(x, y + 1, z) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Top,    block);
+        if (world.GetBlock(x, y - 1, z) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Bottom, block);
+        if (world.GetBlock(x + 1, y, z) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Right,  block);
+        if (world.GetBlock(x - 1, y, z) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Left,   block);
+        if (world.GetBlock(x, y, z + 1) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Front,  block);
+        if (world.GetBlock(x, y, z - 1) == BlockType.Air) AddFace(world, x, y, z, FaceDirection.Back,   block);
     }
 
-    // Biom-Tint: Gras-Oberseite und Blätter bekommen Grün, alles andere weiß (= unverändert)
+    // ── Biom-Tint ─────────────────────────────────────────────────────────────
+
     private static Color GetBiomeTint(BlockType block, FaceDirection direction)
     {
         if (block == BlockType.Grass && direction == FaceDirection.Top)
@@ -71,14 +72,117 @@ public class ChunkMesh
         _                    =>  Vector3.Up
     };
 
-    private void AddFace(int x, int y, int z, FaceDirection direction, BlockType block)
+    // ── Ambient Occlusion ─────────────────────────────────────────────────────
+
+    // Minecraft-AO: 0 (dunkelst) .. 3 (hell) — zwei Seiten + Diagonale
+    private static int VertexAO(bool side1, bool side2, bool corner)
+    {
+        if (side1 && side2) return 0;
+        return 3 - ((side1 ? 1 : 0) + (side2 ? 1 : 0) + (corner ? 1 : 0));
+    }
+
+    // AO-Stufe 0..3 → Helligkeits-Multiplikator (identisch zu Minecraft Java)
+    private static float AOToFloat(int ao) => ao switch
+    {
+        0 => 0.50f,
+        1 => 0.65f,
+        2 => 0.80f,
+        _ => 1.00f
+    };
+
+    // Speichert Biom-Tint (RGB) und AO (Alpha) in einem Color-Wert
+    private static Color TintWithAO(Color tint, float ao)
+        => new Color(tint.R, tint.G, tint.B, (byte)(ao * 255f));
+
+    /// <summary>
+    /// Berechnet für jeden der 4 Eckpunkte einer Fläche den AO-Wert (0..1).
+    /// Reihenfolge: [0..3] entspricht positions[0..3] in AddFace.
+    /// </summary>
+    private static float[] ComputeFaceAO(World.World world, int x, int y, int z, FaceDirection dir)
+    {
+        // Jede Zeile: s1x,s1y,s1z, s2x,s2y,s2z, cx,cy,cz — Offsets relativ zu (x,y,z)
+        int[,] o;
+        switch (dir)
+        {
+            case FaceDirection.Top:
+                o = new int[,]
+                {   // C0:(x,  y+1,z  )  C1:(x+1,y+1,z  )  C2:(x+1,y+1,z+1)  C3:(x,y+1,z+1)
+                    { -1,+1, 0,   0,+1,-1,  -1,+1,-1 },
+                    { +1,+1, 0,   0,+1,-1,  +1,+1,-1 },
+                    { +1,+1, 0,   0,+1,+1,  +1,+1,+1 },
+                    { -1,+1, 0,   0,+1,+1,  -1,+1,+1 },
+                };
+                break;
+            case FaceDirection.Bottom:
+                o = new int[,]
+                {
+                    { -1,-1, 0,   0,-1,+1,  -1,-1,+1 },
+                    { +1,-1, 0,   0,-1,+1,  +1,-1,+1 },
+                    { +1,-1, 0,   0,-1,-1,  +1,-1,-1 },
+                    { -1,-1, 0,   0,-1,-1,  -1,-1,-1 },
+                };
+                break;
+            case FaceDirection.Front: // +Z
+                o = new int[,]
+                {
+                    { -1, 0,+1,   0,-1,+1,  -1,-1,+1 },
+                    { -1, 0,+1,   0,+1,+1,  -1,+1,+1 },
+                    { +1, 0,+1,   0,+1,+1,  +1,+1,+1 },
+                    { +1, 0,+1,   0,-1,+1,  +1,-1,+1 },
+                };
+                break;
+            case FaceDirection.Back: // -Z
+                o = new int[,]
+                {
+                    { +1, 0,-1,   0,-1,-1,  +1,-1,-1 },
+                    { +1, 0,-1,   0,+1,-1,  +1,+1,-1 },
+                    { -1, 0,-1,   0,+1,-1,  -1,+1,-1 },
+                    { -1, 0,-1,   0,-1,-1,  -1,-1,-1 },
+                };
+                break;
+            case FaceDirection.Left: // -X
+                o = new int[,]
+                {
+                    { -1, 0,-1,  -1,-1, 0,  -1,-1,-1 },
+                    { -1, 0,-1,  -1,+1, 0,  -1,+1,-1 },
+                    { -1, 0,+1,  -1,+1, 0,  -1,+1,+1 },
+                    { -1, 0,+1,  -1,-1, 0,  -1,-1,+1 },
+                };
+                break;
+            case FaceDirection.Right: // +X
+                o = new int[,]
+                {
+                    { +1, 0,+1,  +1,-1, 0,  +1,-1,+1 },
+                    { +1, 0,+1,  +1,+1, 0,  +1,+1,+1 },
+                    { +1, 0,-1,  +1,+1, 0,  +1,+1,-1 },
+                    { +1, 0,-1,  +1,-1, 0,  +1,-1,-1 },
+                };
+                break;
+            default:
+                return new float[] { 1f, 1f, 1f, 1f };
+        }
+
+        var result = new float[4];
+        for (int i = 0; i < 4; i++)
+        {
+            bool s1 = world.IsBlockSolid(x + o[i, 0], y + o[i, 1], z + o[i, 2]);
+            bool s2 = world.IsBlockSolid(x + o[i, 3], y + o[i, 4], z + o[i, 5]);
+            bool c  = world.IsBlockSolid(x + o[i, 6], y + o[i, 7], z + o[i, 8]);
+            result[i] = AOToFloat(VertexAO(s1, s2, c));
+        }
+        return result;
+    }
+
+    // ── Fläche aufbauen ───────────────────────────────────────────────────────
+
+    private void AddFace(World.World world, int x, int y, int z, FaceDirection direction, BlockType block)
     {
         int     vertexOffset = _vertices.Count;
         Vector2 texCoord     = GetTextureCoordinates(block, direction);
-        Color   tint         = GetBiomeTint(block, direction);
+        Color   tintBase     = GetBiomeTint(block, direction);
         Vector3 normal       = GetNormal(direction);
 
-        float s = 1f / 16f; // ein Kachel-Schritt im 16×16-Atlas
+        float s = 1f / 16f;
 
         Vector3[] positions;
         switch (direction)
@@ -147,18 +251,39 @@ public class ChunkMesh
                 return;
         }
 
-        _vertices.Add(new BlockVertex(positions[0], texCoord + new Vector2(0, s), normal, tint));
-        _vertices.Add(new BlockVertex(positions[1], texCoord + new Vector2(0, 0), normal, tint));
-        _vertices.Add(new BlockVertex(positions[2], texCoord + new Vector2(s, 0), normal, tint));
-        _vertices.Add(new BlockVertex(positions[3], texCoord + new Vector2(s, s), normal, tint));
+        // AO pro Eckpunkt berechnen (standard Minecraft smooth-lighting)
+        float[] ao = ComputeFaceAO(world, x, y, z, direction);
 
-        _indices.Add(vertexOffset);
-        _indices.Add(vertexOffset + 1);
-        _indices.Add(vertexOffset + 2);
-        _indices.Add(vertexOffset);
-        _indices.Add(vertexOffset + 2);
-        _indices.Add(vertexOffset + 3);
+        _vertices.Add(new BlockVertex(positions[0], texCoord + new Vector2(0, s), normal, TintWithAO(tintBase, ao[0])));
+        _vertices.Add(new BlockVertex(positions[1], texCoord + new Vector2(0, 0), normal, TintWithAO(tintBase, ao[1])));
+        _vertices.Add(new BlockVertex(positions[2], texCoord + new Vector2(s, 0), normal, TintWithAO(tintBase, ao[2])));
+        _vertices.Add(new BlockVertex(positions[3], texCoord + new Vector2(s, s), normal, TintWithAO(tintBase, ao[3])));
+
+        // Diagonale auf die hellere Seite legen, um den "dunklen Streifen"-Artefakt zu vermeiden
+        // (identisch zu Minecraft Javas smooth-lighting Triangulierung)
+        if (ao[0] + ao[2] >= ao[1] + ao[3])
+        {
+            // Standard-Diagonale 0↔2
+            _indices.Add(vertexOffset);
+            _indices.Add(vertexOffset + 1);
+            _indices.Add(vertexOffset + 2);
+            _indices.Add(vertexOffset);
+            _indices.Add(vertexOffset + 2);
+            _indices.Add(vertexOffset + 3);
+        }
+        else
+        {
+            // Gedrehte Diagonale 1↔3
+            _indices.Add(vertexOffset);
+            _indices.Add(vertexOffset + 1);
+            _indices.Add(vertexOffset + 3);
+            _indices.Add(vertexOffset + 1);
+            _indices.Add(vertexOffset + 2);
+            _indices.Add(vertexOffset + 3);
+        }
     }
+
+    // ── Atlas-Koordinaten ─────────────────────────────────────────────────────
 
     private static Vector2 Tile(int col, int row) => new Vector2(col / 16f, row / 16f);
 
@@ -179,6 +304,8 @@ public class ChunkMesh
             _                => Vector2.Zero
         };
     }
+
+    // ── Buffer ────────────────────────────────────────────────────────────────
 
     private void UpdateBuffers()
     {

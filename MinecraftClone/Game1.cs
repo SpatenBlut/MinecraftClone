@@ -28,8 +28,8 @@ public class Game1 : Game
     // Sky
     private Texture2D _skyGradient; // 1x2: Zenit (oben) → Horizont (unten)
     private Texture2D _sunTexture;
-    private static readonly Color SkyZenith  = new Color(100, 145, 230); // tiefes Blau oben
-    private static readonly Color SkyHorizon = new Color(160, 195, 255); // helles Blau am Horizont
+    private static readonly Color SkyZenith  = new Color(120, 167, 255); // Minecraft Plains Zenit  #78A7FF
+    private static readonly Color SkyHorizon = new Color(192, 216, 255); // Minecraft Plains Horizont #C0D8FF
     private static readonly Vector3 SunDirection = Vector3.Normalize(new Vector3(0.5f, 0.85f, 0.3f));
 
     private bool _needsMeshRebuild = false;
@@ -184,16 +184,12 @@ public class Game1 : Game
         _basicEffect.Projection     = _player.Camera.ProjectionMatrix;
         _basicEffect.Texture        = _blockAtlas;
         _basicEffect.CameraPosition = _player.Camera.Position;
-        // Sonne — leicht seitlich von oben (Nachmittags-Feeling)
-        _basicEffect.SunDirection   = Vector3.Normalize(new Vector3(0.4f, 1.0f, 0.3f));
-        _basicEffect.SunColor       = new Vector3(0.55f, 0.50f, 0.40f);   // warmes Gold, reduziert da Ambient heller
-        // Hemisphere-Ambient: kühler Himmel oben, warme Erde unten — bewusst hell damit Seitenflächen sichtbar bleiben
-        _basicEffect.AmbientSky     = new Vector3(0.70f, 0.75f, 0.90f);
-        _basicEffect.AmbientGround  = new Vector3(0.32f, 0.28f, 0.22f);
-        // Nebel Richtung Horizont-Blau
+        // Minecraft Java Beleuchtung: fixe Flächen-Multiplikatoren + AO (kein Hemi/Directional)
+        _basicEffect.DayBrightness  = 1.0f;
+        // Nebel passend zur Horizont-Himmelfarbe
         _basicEffect.FogColor       = SkyHorizon.ToVector3();
-        _basicEffect.FogStart       = 40f;
-        _basicEffect.FogEnd         = 62f;
+        _basicEffect.FogStart       = 48f;
+        _basicEffect.FogEnd         = 90f;
         _basicEffect.Apply();
 
         _chunkMesh.Draw();

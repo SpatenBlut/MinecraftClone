@@ -24,10 +24,9 @@ sampler2D TexSampler = sampler_state
 };
 
 // ── Licht ─────────────────────────────────────────────────────────────────────
-float3 SunDirection;    // normalisiert, Richtung VON Szene ZUR Sonne
-float3 SunColor;        // warmes Gold
-float3 AmbientSky;      // kühles Blau von oben
-float3 AmbientGround;   // warmes Dunkel von unten
+// Minecraft Java verwendet keine physikalische Beleuchtung, sondern fixe
+// Flächen-Multiplikatoren: Top=1.0, Nord/Süd=0.8, Ost/West=0.6, Unten=0.5
+float DayBrightness;   // 0..1  (1.0 = voller Tag; für spätere Tag/Nacht-Implementierung)
 
 // ── Nebel ─────────────────────────────────────────────────────────────────────
 float3 FogColor;
@@ -41,7 +40,7 @@ struct VSIn
     float4 Position : POSITION0;
     float2 TexCoord : TEXCOORD0;
     float3 Normal   : NORMAL0;
-    float4 Color    : COLOR0;   // Biom-Tint, 0..1
+    float4 Color    : COLOR0;   // RGB = Biom-Tint | A = Ambient Occlusion (0..1)
 };
 
 struct VSOut
@@ -49,7 +48,7 @@ struct VSOut
     float4 Position  : SV_POSITION;
     float2 TexCoord  : TEXCOORD0;
     float3 Normal    : TEXCOORD1;
-    float4 Color     : TEXCOORD2;   // als TEXCOORD damit lineare Interpolation garantiert ist
+    float4 Color     : TEXCOORD2;   // als TEXCOORD2 damit AO bilinear interpoliert wird
     float  FogFactor : TEXCOORD3;
 };
 
@@ -62,7 +61,6 @@ VSOut BlockVS(VSIn input)
     output.Normal    = mul(input.Normal, (float3x3)World);
     output.Color     = input.Color;
 
-    // Nebelstärke aus Welt-Distanz
     float4 worldPos  = mul(input.Position, World);
     float  dist      = length(worldPos.xyz - CameraPosition);
     output.FogFactor = saturate((dist - FogStart) / (FogEnd - FogStart));
@@ -76,19 +74,28 @@ float4 BlockPS(VSOut input) : COLOR
     float4 tex    = tex2D(TexSampler, input.TexCoord);
     float3 normal = normalize(input.Normal);
 
-    // Hemisphere-Ambient: Himmel (oben) → Erde (unten)
-    float  hemi    = normal.y * 0.5 + 0.5;
-    float3 ambient = lerp(AmbientGround, AmbientSky, hemi);
+    // Minecraft Java 1.21 Flächen-Multiplikatoren (branchless für GLSL-Kompatibilität)
+    float topMask    = step(0.5,  normal.y);                              // 1.0 wenn Oben
+    float bottomMask = step(0.5, -normal.y);                              // 1.0 wenn Unten
+    float sideMask   = 1.0 - topMask - bottomMask;
+    float ewMask     = sideMask * step(0.5, abs(normal.x));               // Ost / West
+    float nsMask     = sideMask * (1.0 - step(0.5, abs(normal.x)));       // Nord / Süd
 
-    // Gerichtetes Sonnenlicht (Lambert-Diffuse)
-    float  NdotL   = max(dot(normal, SunDirection), 0.0);
-    float3 lit     = ambient + SunColor * NdotL;
+    float faceMul = topMask    * 1.00
+                  + bottomMask * 0.50
+                  + ewMask     * 0.60
+                  + nsMask     * 0.80;
+
+    // Ambient Occlusion — smooth-interpoliert aus Vertex-Alpha
+    float ao = input.Color.a;
+
+    float3 lit = DayBrightness * faceMul * ao;
 
     // Textur × Biom-Tint × Beleuchtung
-    float3 color   = tex.rgb * input.Color.rgb * lit;
+    float3 color = tex.rgb * input.Color.rgb * lit;
 
-    // Nebel zum Horizont hin überblenden
-    color  = lerp(color, FogColor, input.FogFactor);
+    // Nebel
+    color = lerp(color, FogColor, input.FogFactor);
 
     return float4(color, tex.a);
 }
