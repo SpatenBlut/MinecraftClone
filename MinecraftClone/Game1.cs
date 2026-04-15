@@ -33,6 +33,7 @@ public class Game1 : Game
     private static readonly Vector3 SunDirection = Vector3.Normalize(new Vector3(0.5f, 0.85f, 0.3f));
 
     private bool _needsMeshRebuild = false;
+    private bool _inventoryOpen    = false;
     private KeyboardState _lastKeyState;
     private MouseState _lastMouseState;
 
@@ -88,7 +89,7 @@ public class Game1 : Game
         _blockAtlas  = Content.Load<Texture2D>("Textures/atlas");
         _sunTexture  = Content.Load<Texture2D>("Textures/sun");
         _font        = Content.Load<SpriteFont>("Font");
-        _hud         = new HUD(GraphicsDevice, _font);
+        _hud         = new HUD(GraphicsDevice, _font, _blockAtlas);
 
         // Sky-Gradient: 1×2 Pixel — bilineares Strecken ergibt sauberen Farbverlauf
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
@@ -102,40 +103,106 @@ public class Game1 : Game
         var keyState = Keyboard.GetState();
 
         if (keyState.IsKeyDown(Keys.Escape))
-            Exit();
+        {
+            if (_inventoryOpen)
+            {
+                _inventoryOpen = false;
+                IsMouseVisible = false;
+                _inventory.ReturnCursorStack();
+                _player.Camera.ResetMouseLock();
+            }
+            else
+            {
+                Exit();
+            }
+        }
 
         if (!IsActive) { base.Update(gameTime); return; }
 
-        _player.PollInput();
-
-        _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
+        // E-Taste: Inventar öffnen / schließen
+        if (keyState.IsKeyDown(Keys.E) && _lastKeyState.IsKeyUp(Keys.E))
+        {
+            _inventoryOpen = !_inventoryOpen;
+            IsMouseVisible = _inventoryOpen;
+            if (_inventoryOpen)
+            {
+                _player.StopHorizontalMovement();
+            }
+            else
+            {
+                _inventory.ReturnCursorStack();
+                _player.Camera.ResetMouseLock();
+            }
+        }
 
         var mouseState = Mouse.GetState();
 
-        int ticksThisFrame = 0;
-        while (_tickAccumulator >= TickInterval && ticksThisFrame < 5)
+        if (_inventoryOpen)
         {
-            _player.SaveTickState();
-            _player.Tick((float)TickInterval, _world);
-            _inventory.Update(keyState, mouseState.ScrollWheelValue);
-            _tickAccumulator -= TickInterval;
-            ticksThisFrame++;
-        }
+            // ── Inventar offen: Mausklicks auf Slots weiterleiten ──────────────
+            int slotIdx = _hud.GetInventorySlotAt(
+                mouseState.X, mouseState.Y,
+                GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
-        float alpha     = (float)(_tickAccumulator / TickInterval);
-        float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        _player.SetRenderPosition(alpha, deltaTime);
-        _player.UpdateCamera(gameTime, GraphicsDevice);
-        if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
-        {
-            if (_player.TryBreakBlock(_world, out _, out _))
-                _needsMeshRebuild = true;
-        }
+            bool shiftHeld = keyState.IsKeyDown(Keys.LeftShift) || keyState.IsKeyDown(Keys.RightShift);
 
-        if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
+            if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
+            {
+                if (slotIdx >= 0) _inventory.OnSlotLeftClick(slotIdx, shiftHeld);
+            }
+            if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
+            {
+                if (slotIdx >= 0) _inventory.OnSlotRightClick(slotIdx);
+            }
+
+            // Physik weiterführen, aber keine Spieler-Eingabe
+            _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
+            int ticksInv = 0;
+            while (_tickAccumulator >= TickInterval && ticksInv < 5)
+            {
+                _player.SaveTickState();
+                _player.Tick((float)TickInterval, _world, inputEnabled: false);
+                _tickAccumulator -= TickInterval;
+                ticksInv++;
+            }
+            float alphaInv   = (float)(_tickAccumulator / TickInterval);
+            float dtInv      = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            _player.SetRenderPosition(alphaInv, dtInv);
+            _player.Camera.RefreshViewMatrix();
+        }
+        else
         {
-            if (_player.TryPlaceBlock(_world, _inventory.SelectedBlock, out _))
-                _needsMeshRebuild = true;
+            // ── Normales Gameplay ──────────────────────────────────────────────
+            _player.PollInput();
+
+            _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
+
+            int ticksThisFrame = 0;
+            while (_tickAccumulator >= TickInterval && ticksThisFrame < 5)
+            {
+                _player.SaveTickState();
+                _player.Tick((float)TickInterval, _world);
+                _inventory.Update(keyState, mouseState.ScrollWheelValue);
+                _tickAccumulator -= TickInterval;
+                ticksThisFrame++;
+            }
+
+            float alpha     = (float)(_tickAccumulator / TickInterval);
+            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            _player.SetRenderPosition(alpha, deltaTime);
+            _player.UpdateCamera(gameTime, GraphicsDevice);
+
+            if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
+            {
+                if (_player.TryBreakBlock(_world, out _, out _))
+                    _needsMeshRebuild = true;
+            }
+
+            if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
+            {
+                if (_player.TryPlaceBlock(_world, _inventory.SelectedBlock, out _))
+                    _needsMeshRebuild = true;
+            }
         }
 
         _lastMouseState = mouseState;
@@ -195,7 +262,9 @@ public class Game1 : Game
         _chunkMesh.Draw();
 
         // 4) HUD
-        _hud.Draw(_spriteBatch, _player, _inventory, screenW, screenH, gameTime);
+        var ms = Mouse.GetState();
+        _hud.Draw(_spriteBatch, _player, _inventory, screenW, screenH, gameTime,
+            _inventoryOpen, ms.X, ms.Y);
 
         base.Draw(gameTime);
     }

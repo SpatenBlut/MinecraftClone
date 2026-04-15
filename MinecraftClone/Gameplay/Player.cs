@@ -49,7 +49,9 @@ public class Player
     private KeyboardState _lastFrameKeyState;
 
     // Gebufferte Inputs — werden jeden Frame gesetzt, beim nächsten Tick konsumiert
-    private bool _jumpBuffered = false;
+    private bool  _jumpBuffered    = false;
+    private float _jumpBufferTimer = 0f;
+    private const float JumpBufferWindow = 0.15f; // 3 Ticks Puffer-Fenster
 
     // Für Render-Interpolation zwischen Ticks
     public Vector3 PreviousPosition;
@@ -71,12 +73,21 @@ public class Player
     }
 
     // Wird exakt 20x pro Sekunde aufgerufen (fixer 50ms Tick wie Minecraft)
-    public void Tick(float deltaTime, World.World world)
+    // inputEnabled=false: Physik (Schwerkraft, Kollision) läuft weiter, aber keine Tastatur-/Maus-Eingabe
+    public void Tick(float deltaTime, World.World world, bool inputEnabled = true)
     {
         if (_jumpCooldown > 0)
             _jumpCooldown -= deltaTime;
 
-        HandleInput(deltaTime, world);
+        if (_jumpBufferTimer > 0)
+        {
+            _jumpBufferTimer -= deltaTime;
+            if (_jumpBufferTimer <= 0)
+                _jumpBuffered = false;
+        }
+
+        if (inputEnabled)
+            HandleInput(deltaTime, world);
 
         // Schleich-Kantenschutz
         if (_isSneaking && _isGrounded && (Velocity.X != 0f || Velocity.Z != 0f))
@@ -161,7 +172,10 @@ public class Player
     {
         var keyState = Keyboard.GetState();
         if (keyState.IsKeyDown(Keys.Space) && _lastFrameKeyState.IsKeyUp(Keys.Space))
-            _jumpBuffered = true;
+        {
+            _jumpBuffered    = true;
+            _jumpBufferTimer = JumpBufferWindow;
+        }
         _lastFrameKeyState = keyState;
     }
 
@@ -262,12 +276,20 @@ public class Player
                 _isGrounded = false;
                 _jumpCooldown = JumpCooldownTime;
                 _fallDistance = 0f;
+                _jumpBuffered    = false;
+                _jumpBufferTimer = 0f;
             }
-            _jumpBuffered = false;
+            // Buffer bleibt aktiv bis Timer abläuft (siehe Tick) — kein sofortiges Leeren
         }
 
         _lastKeyState = keyState;
         _lastMouseState = mouseState;
+    }
+
+    public void StopHorizontalMovement()
+    {
+        Velocity.X = 0f;
+        Velocity.Z = 0f;
     }
 
     public void TakeDamage(float damage)
@@ -325,10 +347,10 @@ public class Player
                 new Vector3(blockPos.X + 1, blockPos.Y + 1, blockPos.Z + 1)
             );
 
-            // Konsistente Basis: Kamera-Position minus Augenhöhe (gleiche Basis wie der Raycast)
-            Vector3 basePos = Camera.Position - new Vector3(0, _currentEyeHeight, 0);
+            // Physik-Position verwenden (nicht Kamera) — beim Fallen liegt die Kamera
+            // hinter der echten Position, was falsche Kollisionstests verursacht
             float currentHeight = _isSneaking ? SneakHeight : NormalHeight;
-            AABB playerBox = AABB.FromPosition(basePos, PlayerWidth, currentHeight, PlayerDepth);
+            AABB playerBox = AABB.FromPosition(Position, PlayerWidth, currentHeight, PlayerDepth);
 
             if (!blockBox.Intersects(playerBox))
             {

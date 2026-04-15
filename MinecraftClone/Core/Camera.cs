@@ -17,13 +17,14 @@ public class Camera
 
     private float _yaw;
     private float _pitch;
-    private float _mouseSensitivity = 0.0006f;
 
-    private const float NormalFov  = 75f;
-    private const float SprintFov  = 85f;
-    private const float FovSpeed   = 8f;    // Grad pro Sekunde (smooth wie Minecraft)
+    public float MouseSensitivity { get; set; } = 0.0006f;
+    public float BaseFov          { get; set; } = 75f;
 
-    private float _currentFov = NormalFov;
+    private const float SprintFovBonus = 10f;
+    private const float FovSpeed       = 8f;
+
+    private float _currentFov = 75f;
     public bool IsSprinting { private get; set; }
 
     private bool _firstMouseMove = true;
@@ -73,8 +74,8 @@ public class Camera
         float deltaX = mouseState.X - _lastMouseX;
         float deltaY = mouseState.Y - _lastMouseY;
 
-        _yaw += deltaX * _mouseSensitivity;
-        _pitch -= deltaY * _mouseSensitivity;
+        _yaw += deltaX * MouseSensitivity;
+        _pitch -= deltaY * MouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
         // Maus zurück in die Mitte setzen, dann sofort auslesen
@@ -84,7 +85,7 @@ public class Camera
         _lastMouseY = warped.Y;
 
         // FOV smooth anpassen (Sprint-Effekt wie Minecraft)
-        float targetFov = IsSprinting ? SprintFov : NormalFov;
+        float targetFov = IsSprinting ? BaseFov + SprintFovBonus : BaseFov;
         _currentFov += (targetFov - _currentFov) * MathHelper.Clamp(FovSpeed * deltaTime, 0f, 1f);
         ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(
             MathHelper.ToRadians(_currentFov),
@@ -111,6 +112,12 @@ public class Camera
     private void UpdateViewMatrix()
     {
         ViewMatrix = Matrix.CreateLookAt(Position, Position + Forward, Up);
+    }
+
+    // Nur ViewMatrix neu berechnen (ohne Maus-Input) — wird benutzt wenn Inventar offen ist
+    public void RefreshViewMatrix()
+    {
+        UpdateViewMatrix();
     }
 
     public void ResetMouseLock()
