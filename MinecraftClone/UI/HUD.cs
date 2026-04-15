@@ -104,9 +104,9 @@ public class HUD
                 new Rectangle(x, hotbarY, slotSize, slotSize), slotColor, 2);
 
             // Block-Name
-            if (inventory.Hotbar[i] != World.BlockType.Air)
+            if (!inventory.GetSlot(i).IsEmpty)
             {
-                string name = inventory.Hotbar[i].ToString();
+                string name = inventory.GetSlot(i).Block.ToString();
                 Vector2 textSize = _font.MeasureString(name);
                 spriteBatch.DrawString(_font, name,
                     new Vector2(x + slotSize / 2f - textSize.X * 0.35f,
@@ -122,31 +122,31 @@ public class HUD
 
     private void DrawHearts(SpriteBatch spriteBatch, Player player, int hotbarStartX, int hotbarY)
     {
-        const int gap = 6; // Abstand zwischen Herzen und Hotbar
+        // Herzen sollen exakt die Breite der ersten 4 Hotbar-Slots einnehmen
+        const int slotSize    = 62;
+        const int slotSpacing = 5;
+        const int totalWidth  = 4 * (slotSize + slotSpacing) - slotSpacing; // 263px
+        const int gap         = 6;
 
-        int startX = hotbarStartX;  // Linksbündig mit der Hotbar
+        float heartSpacing = (totalWidth - TotalHearts * HeartW) / (float)(TotalHearts - 1);
+
+        int startX = hotbarStartX;
         int y      = hotbarY - HeartH - gap;
 
         float hp = player.Health; // 0 – 20
 
         for (int i = 0; i < TotalHearts; i++)
         {
-            int x          = startX + i * (HeartW + HeartSpacing);
-            float heartHp  = hp - i * 2f; // 2 = ein volles Herz
+            int x         = startX + (int)(i * (HeartW + heartSpacing));
+            float heartHp = hp - i * 2f;
 
             // Leeres Herz (Umriss) immer zeichnen
-            DrawHeartPixels(spriteBatch, x, y, full: true,  color: new Color(30, 0, 0));
+            DrawHeartPixels(spriteBatch, x, y, full: true, color: new Color(30, 0, 0));
 
             if (heartHp >= 2f)
-            {
-                // Volles Herz
                 DrawHeartPixels(spriteBatch, x, y, full: true, color: Color.Red);
-            }
             else if (heartHp >= 1f)
-            {
-                // Halbes Herz – nur linke 4 Spalten
                 DrawHeartPixels(spriteBatch, x, y, full: false, color: Color.Red);
-            }
         }
     }
 

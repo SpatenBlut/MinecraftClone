@@ -7,7 +7,9 @@
       "Bash(taskkill /F /IM MinecraftClone.exe)",
       "Bash(tasklist)",
       "Bash(taskkill:*)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Bash(dotnet run *)",
+      "Bash(del \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\bin\\\\Debug\\\\net8.0\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\")"
     ]
   }
 }

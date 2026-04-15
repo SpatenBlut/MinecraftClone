@@ -110,12 +110,14 @@ public class Game1 : Game
 
         _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
 
+        var mouseState = Mouse.GetState();
+
         int ticksThisFrame = 0;
         while (_tickAccumulator >= TickInterval && ticksThisFrame < 5)
         {
             _player.SaveTickState();
             _player.Tick((float)TickInterval, _world);
-            _inventory.Update();
+            _inventory.Update(keyState, mouseState.ScrollWheelValue);
             _tickAccumulator -= TickInterval;
             ticksThisFrame++;
         }
@@ -124,11 +126,9 @@ public class Game1 : Game
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _player.SetRenderPosition(alpha, deltaTime);
         _player.UpdateCamera(gameTime, GraphicsDevice);
-
-        var mouseState = Mouse.GetState();
         if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
         {
-            if (_player.TryBreakBlock(_world, out _))
+            if (_player.TryBreakBlock(_world, out _, out _))
                 _needsMeshRebuild = true;
         }
 

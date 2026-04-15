@@ -43,49 +43,31 @@ public class World
 
     public void Generate()
     {
-        Random random = new Random();
-
-        // Grundebene: Stein
+        // Schichten: y=0,1,2 → Stone | y=3,4 → Dirt | y=5 → Grass (flach)
         for (int x = 0; x < Width; x++)
         {
             for (int z = 0; z < Depth; z++)
             {
-                for (int y = 0; y < 3; y++)
-                {
-                    SetBlock(x, y, z, BlockType.Stone);
-                }
+                SetBlock(x, 0, z, BlockType.Stone);
+                SetBlock(x, 1, z, BlockType.Stone);
+                SetBlock(x, 2, z, BlockType.Stone);
+                SetBlock(x, 3, z, BlockType.Dirt);
+                SetBlock(x, 4, z, BlockType.Dirt);
+                SetBlock(x, 5, z, BlockType.Grass);
             }
         }
 
-        // Erdschicht
-        for (int x = 0; x < Width; x++)
-        {
-            for (int z = 0; z < Depth; z++)
-            {
-                int height = 3 + random.Next(0, 3);
-                for (int y = 3; y < height; y++)
-                {
-                    SetBlock(x, y, z, BlockType.Dirt);
-                }
-
-                // Gras oben drauf
-                if (height > 3)
-                    SetBlock(x, height - 1, z, BlockType.Grass);
-            }
-        }
-
-        // Einige Bäume
+        // Einige Bäume (Stamm beginnt bei y=6, direkt über dem Gras)
+        Random random = new Random(42);
         for (int i = 0; i < 10; i++)
         {
             int x = random.Next(2, Width - 2);
             int z = random.Next(2, Depth - 2);
-            int y = 5;
+            int y = 6;
 
             // Stamm
             for (int h = 0; h < 5; h++)
-            {
                 SetBlock(x, y + h, z, BlockType.Wood);
-            }
 
             // Blätter
             for (int dx = -2; dx <= 2; dx++)
@@ -96,10 +78,8 @@ public class World
                     {
                         if (Math.Abs(dx) == 2 && Math.Abs(dz) == 2 && dy == 4)
                             continue;
-
                         if (dx == 0 && dz == 0 && dy < 6)
                             continue;
-
                         SetBlock(x + dx, y + dy, z + dz, BlockType.Leaves);
                     }
                 }
