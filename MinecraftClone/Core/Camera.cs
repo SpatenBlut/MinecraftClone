@@ -48,9 +48,24 @@ public class Camera
         UpdateViewMatrix();
     }
 
-    public void Update(GameTime gameTime, GraphicsDevice graphicsDevice)
+    public void Update(GameTime gameTime, GraphicsDevice graphicsDevice, bool captureMouseInput = true)
     {
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
+
+        // FOV smooth anpassen (Sprint-Effekt wie Minecraft)
+        float targetFov = IsSprinting ? BaseFov + SprintFovBonus : BaseFov;
+        _currentFov += (targetFov - _currentFov) * MathHelper.Clamp(FovSpeed * deltaTime, 0f, 1f);
+        ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(
+            MathHelper.ToRadians(_currentFov),
+            graphicsDevice.Viewport.Width / (float)graphicsDevice.Viewport.Height,
+            0.1f, 1000f);
+
+        if (!captureMouseInput)
+        {
+            UpdateVectors();
+            UpdateViewMatrix();
+            return;
+        }
 
         // Mouse input - Maus in Bildschirmmitte zentrieren
         var mouseState = Mouse.GetState();
@@ -60,17 +75,15 @@ public class Camera
         if (_firstMouseMove)
         {
             Mouse.SetPosition(screenCenterX, screenCenterY);
-            // Direkt nach SetPosition nochmal lesen — speichert die echte Position
-            // die das OS gesetzt hat (nicht die gewünschte), damit kein Delta-Fehler entsteht
             var s = Mouse.GetState();
             _lastMouseX = s.X;
             _lastMouseY = s.Y;
             _firstMouseMove = false;
+            UpdateVectors();
+            UpdateViewMatrix();
             return;
         }
 
-        // Delta gegen LETZTE BEKANNTE Position berechnen (nicht gegen berechnetes Zentrum)
-        // → verhindert Drift bei sehr hohem FPS wenn SetPosition noch nicht vom OS verarbeitet wurde
         float deltaX = mouseState.X - _lastMouseX;
         float deltaY = mouseState.Y - _lastMouseY;
 
@@ -78,19 +91,10 @@ public class Camera
         _pitch -= deltaY * MouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
-        // Maus zurück in die Mitte setzen, dann sofort auslesen
         Mouse.SetPosition(screenCenterX, screenCenterY);
         var warped = Mouse.GetState();
         _lastMouseX = warped.X;
         _lastMouseY = warped.Y;
-
-        // FOV smooth anpassen (Sprint-Effekt wie Minecraft)
-        float targetFov = IsSprinting ? BaseFov + SprintFovBonus : BaseFov;
-        _currentFov += (targetFov - _currentFov) * MathHelper.Clamp(FovSpeed * deltaTime, 0f, 1f);
-        ProjectionMatrix = Matrix.CreatePerspectiveFieldOfView(
-            MathHelper.ToRadians(_currentFov),
-            graphicsDevice.Viewport.Width / (float)graphicsDevice.Viewport.Height,
-            0.1f, 1000f);
 
         UpdateVectors();
         UpdateViewMatrix();

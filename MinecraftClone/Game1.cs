@@ -149,7 +149,7 @@ public class Game1 : Game
         // ── Mouse visibility ──────────────────────────────────────────────────
         IsMouseVisible = _inventoryOpen || _paused;
 
-        // ── Pause menu ────────────────────────────────────────────────────────
+        // ── Menu overlay (game keeps running) ────────────────────────────────
         if (_paused)
         {
             _pauseMenu.Update(_blocksPlaced, _blocksBroken, (float)_playTimeSec,
@@ -165,18 +165,12 @@ public class Game1 : Game
                 Exit();
             }
 
-            // Apply settings live
             _player.Camera.MouseSensitivity = _pauseMenu.MouseSensitivity;
             _player.Camera.BaseFov          = _pauseMenu.Fov;
-
-            _lastKeyState   = keyState;
-            _lastMouseState = mouseState;
-            base.Update(gameTime);
-            return;
         }
 
         // ── E key: inventory ──────────────────────────────────────────────────
-        if (keyState.IsKeyDown(Keys.E) && _lastKeyState.IsKeyUp(Keys.E))
+        if (!_paused && keyState.IsKeyDown(Keys.E) && _lastKeyState.IsKeyUp(Keys.E))
         {
             _inventoryOpen = !_inventoryOpen;
             if (!_inventoryOpen)
@@ -186,11 +180,11 @@ public class Game1 : Game
             }
         }
 
-        // ── Play time (only while actually playing) ───────────────────────────
+        // ── Play time ─────────────────────────────────────────────────────────
         _playTimeSec += gameTime.ElapsedGameTime.TotalSeconds;
 
         // ── Inventory open ────────────────────────────────────────────────────
-        if (_inventoryOpen)
+        if (_inventoryOpen && !_paused)
         {
             int slotIdx = _hud.GetInventorySlotAt(
                 mouseState.X, mouseState.Y,
@@ -202,40 +196,32 @@ public class Game1 : Game
                 if (slotIdx >= 0) _inventory.OnSlotLeftClick(slotIdx, shiftHeld);
             if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
                 if (slotIdx >= 0) _inventory.OnSlotRightClick(slotIdx);
-
-            _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
-            int ticks = 0;
-            while (_tickAccumulator >= TickInterval && ticks < 5)
-            {
-                _player.SaveTickState();
-                _player.Tick((float)TickInterval, _world, inputEnabled: false);
-                _tickAccumulator -= TickInterval;
-                ticks++;
-            }
-            float alphaInv = (float)(_tickAccumulator / TickInterval);
-            _player.SetRenderPosition(alphaInv, (float)gameTime.ElapsedGameTime.TotalSeconds);
-            _player.Camera.RefreshViewMatrix();
         }
-        // ── Normal gameplay ───────────────────────────────────────────────────
-        else
-        {
+
+        // ── Physics / movement (always runs) ─────────────────────────────────
+        bool menuActive = _paused || _inventoryOpen;
+        if (!menuActive)
             _player.PollInput();
 
-            _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
-            int ticks = 0;
-            while (_tickAccumulator >= TickInterval && ticks < 5)
-            {
-                _player.SaveTickState();
-                _player.Tick((float)TickInterval, _world);
+        _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
+        int tickCount = 0;
+        while (_tickAccumulator >= TickInterval && tickCount < 5)
+        {
+            _player.SaveTickState();
+            _player.Tick((float)TickInterval, _world, inputEnabled: !menuActive);
+            if (!menuActive)
                 _inventory.Update(keyState, mouseState.ScrollWheelValue);
-                _tickAccumulator -= TickInterval;
-                ticks++;
-            }
+            _tickAccumulator -= TickInterval;
+            tickCount++;
+        }
 
-            float alpha = (float)(_tickAccumulator / TickInterval);
-            _player.SetRenderPosition(alpha, (float)gameTime.ElapsedGameTime.TotalSeconds);
-            _player.UpdateCamera(gameTime, GraphicsDevice);
+        float interpAlpha = (float)(_tickAccumulator / TickInterval);
+        _player.SetRenderPosition(interpAlpha, (float)gameTime.ElapsedGameTime.TotalSeconds);
+        _player.UpdateCamera(gameTime, GraphicsDevice, captureMouseInput: !menuActive);
 
+        // ── Block interaction (only when playing freely) ──────────────────────
+        if (!menuActive)
+        {
             if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
             {
                 if (_player.TryBreakBlock(_world, out _, out _))

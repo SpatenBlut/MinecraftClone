@@ -64,7 +64,7 @@ public sealed class BlockIconRenderer : IDisposable
             new Vector3(0.5f, 0.5f, 0.5f),
             Vector3.Up);
         // Orthografische Projektion – Breite/Höhe so gewählt, dass Würfel gut reinpasst
-        var projection = Matrix.CreateOrthographic(1.5f, 1.5f, 0.1f, 100f);
+        var projection = Matrix.CreateOrthographic(1.6f, 1.75f, 0.1f, 100f);
 
         _effect.World      = Matrix.Identity;
         _effect.View       = view;

@@ -184,9 +184,9 @@ public class Player
         _lastFrameKeyState = keyState;
     }
 
-    public void UpdateCamera(GameTime gameTime, GraphicsDevice graphicsDevice)
+    public void UpdateCamera(GameTime gameTime, GraphicsDevice graphicsDevice, bool captureMouseInput = true)
     {
-        Camera.Update(gameTime, graphicsDevice);
+        Camera.Update(gameTime, graphicsDevice, captureMouseInput);
     }
 
     private void HandleInput(float deltaTime, World.World world)

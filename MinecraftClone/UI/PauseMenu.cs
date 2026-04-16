@@ -128,11 +128,10 @@ public class PauseMenu
 
     private static readonly (string Label, bool Danger, bool Accent)[] MainItems =
     {
-        ("Resume",     false, true ),
+        ("Main Menu",  false, false),
         ("Settings",   false, false),
         ("Statistics", false, false),
-        ("Main Menu",  false, false),
-        ("Quit Game",  true,  false),
+        ("Leave",      true,  false),
     };
 
     private (int wx, int wy, int ph, Rectangle[] btns) MainLayout(int sw, int sh)
@@ -166,11 +165,10 @@ public class PauseMenu
     private void HandleMain(int mx, int my, int sw, int sh)
     {
         var (_, _, _, btns) = MainLayout(sw, sh);
-        if      (btns[0].Contains(mx, my)) WantsResume   = true;
+        if      (btns[0].Contains(mx, my)) WantsMainMenu = true;
         else if (btns[1].Contains(mx, my)) _screen       = Screen.Settings;
         else if (btns[2].Contains(mx, my)) _screen       = Screen.Stats;
-        else if (btns[3].Contains(mx, my)) WantsMainMenu = true;
-        else if (btns[4].Contains(mx, my)) WantsQuit     = true;
+        else if (btns[3].Contains(mx, my)) WantsQuit     = true;
     }
 
     // ══════════════════════════ SETTINGS ══════════════════════════════════════
