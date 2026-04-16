@@ -117,18 +117,21 @@ public class Game1 : Game
             }
         }
 
-        if (!IsActive) { base.Update(gameTime); return; }
+        if (!IsActive)
+        {
+            IsMouseVisible = true;
+            _player.Camera.ResetMouseLock();
+            base.Update(gameTime);
+            return;
+        }
+        IsMouseVisible = _inventoryOpen;
 
         // E-Taste: Inventar öffnen / schließen
         if (keyState.IsKeyDown(Keys.E) && _lastKeyState.IsKeyUp(Keys.E))
         {
             _inventoryOpen = !_inventoryOpen;
             IsMouseVisible = _inventoryOpen;
-            if (_inventoryOpen)
-            {
-                _player.StopHorizontalMovement();
-            }
-            else
+            if (!_inventoryOpen)
             {
                 _inventory.ReturnCursorStack();
                 _player.Camera.ResetMouseLock();
@@ -201,7 +204,10 @@ public class Game1 : Game
             if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
             {
                 if (_player.TryPlaceBlock(_world, _inventory.SelectedBlock, out _))
+                {
+                    _inventory.ConsumeFromSelected();
                     _needsMeshRebuild = true;
+                }
             }
         }
 

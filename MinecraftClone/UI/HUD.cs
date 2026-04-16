@@ -26,7 +26,7 @@ public class HUD
         { false, false, true,  true,  true,  true,  false, false },
         { false, false, false, true,  true,  false, false, false },
     };
-    private const float HeartPixelSize = 2.0f;
+    private const float HeartPixelSize = 2.2f;
     private const int   HeartCols      = 8;
     private const int   HeartRows      = 6;
     private static readonly int HeartW = (int)(HeartCols * HeartPixelSize);
@@ -67,7 +67,7 @@ public class HUD
             ? (float)(1.0 / gameTime.ElapsedGameTime.TotalSeconds) : _smoothFps;
         _smoothFps = _smoothFps * 0.85f + fps * 0.15f;
 
-        sb.Begin();
+        sb.Begin(samplerState: SamplerState.PointClamp);
 
         if (!inventoryOpen)
             DrawCrosshair(sb, screenWidth, screenHeight);
@@ -97,7 +97,7 @@ public class HUD
     private void DrawHotbar(SpriteBatch sb, Inventory inventory,
         int sw, int sh, out int hotbarY, out int hotbarStartX)
     {
-        const int slotSize = 42, spacing = 3, slots = 9;
+        const int slotSize = 46, spacing = 3, slots = 9;
         int totalWidth = (slotSize + spacing) * slots - spacing;
         int startX = (sw - totalWidth) / 2;
         hotbarY      = sh - slotSize - 10;
@@ -119,7 +119,7 @@ public class HUD
 
     private void DrawHearts(SpriteBatch sb, Player player, int hotbarStartX, int hotbarY)
     {
-        float heartSpacing = (4 * (42 + 3) - 3 - TotalHearts * HeartW) / (float)(TotalHearts - 1);
+        float heartSpacing = (4 * (46 + 3) - 3 - TotalHearts * HeartW) / (float)(TotalHearts - 1);
         int startX = hotbarStartX;
         int y      = hotbarY - HeartH - 6;
         float hp   = player.Health;
@@ -151,17 +151,17 @@ public class HUD
     private void DrawFps(SpriteBatch sb, int sw)
     {
         string t = $"FPS: {(int)_smoothFps}";
-        Vector2 sz = _font.MeasureString(t) * 0.75f;
+        Vector2 sz = _font.MeasureString(t) * 0.33f;
         sb.DrawString(_font, t, new Vector2(sw - sz.X - 10, 10),
-            Color.White, 0f, Vector2.Zero, 0.75f, SpriteEffects.None, 0f);
+            Color.White, 0f, Vector2.Zero, 0.33f, SpriteEffects.None, 0f);
     }
 
     private void DrawDebugInfo(SpriteBatch sb, Player player, int x, int y)
     {
         sb.DrawString(_font, $"Pos: {player.Position.X:F1}, {player.Position.Y:F1}, {player.Position.Z:F1}",
-            new Vector2(x, y), Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+            new Vector2(x, y), Color.White, 0f, Vector2.Zero, 0.31f, SpriteEffects.None, 0f);
         sb.DrawString(_font, $"Vel: {player.Velocity.X:F1}, {player.Velocity.Y:F1}, {player.Velocity.Z:F1}",
-            new Vector2(x, y + 20), Color.White, 0f, Vector2.Zero, 0.7f, SpriteEffects.None, 0f);
+            new Vector2(x, y + 20), Color.White, 0f, Vector2.Zero, 0.31f, SpriteEffects.None, 0f);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -208,7 +208,7 @@ public class HUD
     // ── Label mit Schatten (Dark Steel) ──────────────────────────────────────
     private void DsLabel(SpriteBatch sb, string text, int wx, int wy, int gx, int gy, int sc)
     {
-        float s = sc * 0.42f;
+        float s = sc * 0.18f;
         var pos = new Vector2(wx + gx * sc, wy + gy * sc);
         sb.DrawString(_font, text, pos + new Vector2(sc * 0.5f, sc * 0.5f),
             DsDark, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
@@ -369,7 +369,7 @@ public class HUD
     {
         if (item.IsEmpty) return;
 
-        int pad  = sc * 2;
+        int pad  = sc * 3;
         var dest = new Rectangle(slotRect.X + pad, slotRect.Y + pad,
                                  slotRect.Width - 2 * pad, slotRect.Height - 2 * pad);
 
@@ -378,7 +378,7 @@ public class HUD
         if (drawCount && item.Count > 1)
         {
             string s     = item.Count.ToString();
-            float  fsc   = sc * 0.38f;
+            float  fsc   = sc * 0.17f;
             Vector2 size = _font.MeasureString(s) * fsc;
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - sc + sc * 0.5f,
@@ -404,7 +404,7 @@ public class HUD
         if (drawCount && item.Count > 1)
         {
             string s     = item.Count.ToString();
-            float  fsc   = 0.55f;
+            float  fsc   = 0.33f;
             Vector2 size = _font.MeasureString(s) * fsc;
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - 2, slotRect.Bottom - size.Y - 2),

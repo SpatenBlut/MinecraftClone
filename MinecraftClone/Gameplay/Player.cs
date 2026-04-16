@@ -88,6 +88,11 @@ public class Player
 
         if (inputEnabled)
             HandleInput(deltaTime, world);
+        else if (_isGrounded)
+        {
+            Velocity.X = 0f;
+            Velocity.Z = 0f;
+        }
 
         // Schleich-Kantenschutz
         if (_isSneaking && _isGrounded && (Velocity.X != 0f || Velocity.Z != 0f))

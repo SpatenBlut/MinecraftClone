@@ -89,6 +89,7 @@ public sealed class BlockIconRenderer : IDisposable
         _gd.BlendState        = BlendState.Opaque;
         _gd.DepthStencilState = DepthStencilState.Default;
         _gd.RasterizerState   = RasterizerState.CullNone;
+        _gd.SamplerStates[0]  = SamplerState.PointClamp;
 
         _gd.SetVertexBuffer(vb);
         _gd.Indices = ib;
@@ -96,6 +97,8 @@ public sealed class BlockIconRenderer : IDisposable
         foreach (var pass in _effect.CurrentTechnique.Passes)
         {
             pass.Apply();
+            // pass.Apply() resets sampler states from the effect — override afterwards
+            _gd.SamplerStates[0] = SamplerState.PointClamp;
             _gd.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, indices.Length / 3);
         }
 
