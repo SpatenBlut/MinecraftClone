@@ -234,7 +234,10 @@ public class Player
         if (keyState.IsKeyDown(Keys.A)) moveDirection -= right;
         if (keyState.IsKeyDown(Keys.D)) moveDirection += right;
 
-        if (_isGrounded)
+        // Bunnyhop: wenn ein Sprung gebuffert ist und wir landen, Bodenreibung überspringen
+        bool willBunnyhop = _isGrounded && _jumpBuffered && !_isSneaking && _jumpCooldown <= 0;
+
+        if (_isGrounded && !willBunnyhop)
         {
             // Am Boden: direkte Geschwindigkeitssetzung (sofortige Reaktion wie in Minecraft)
             if (moveDirection.LengthSquared() > 0)
@@ -251,7 +254,7 @@ public class Player
         }
         else
         {
-            // In der Luft: nur kleine Beschleunigung, kein direktes Umlenken
+            // In der Luft (oder Bunnyhop-Frame): nur kleine Beschleunigung, kein direktes Umlenken
             // Minecraft: 0.02 b/tick Luftbeschleunigung (Sprint: 0.026 b/tick)
             if (moveDirection.LengthSquared() > 0)
             {
@@ -273,7 +276,8 @@ public class Player
         }
 
         // --- Springen ---
-        if (_jumpBuffered && !_isSneaking)
+        bool wantJump = _jumpBuffered || keyState.IsKeyDown(Keys.Space);
+        if (wantJump && !_isSneaking)
         {
             if (_isGrounded && _jumpCooldown <= 0)
             {

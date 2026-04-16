@@ -28,8 +28,6 @@ public class Camera
     public bool IsSprinting { private get; set; }
 
     private bool _firstMouseMove = true;
-    private int  _lastMouseX;
-    private int  _lastMouseY;
 
     public Camera(Vector3 position, float aspectRatio)
     {
@@ -75,26 +73,23 @@ public class Camera
         if (_firstMouseMove)
         {
             Mouse.SetPosition(screenCenterX, screenCenterY);
-            var s = Mouse.GetState();
-            _lastMouseX = s.X;
-            _lastMouseY = s.Y;
             _firstMouseMove = false;
             UpdateVectors();
             UpdateViewMatrix();
             return;
         }
 
-        float deltaX = mouseState.X - _lastMouseX;
-        float deltaY = mouseState.Y - _lastMouseY;
+        // Delta is always relative to screen center — no _lastMouse tracking needed.
+        // This avoids the warp race condition where SetPosition isn't applied yet
+        // before the next GetState(), which caused inconsistent slow vs. fast movement.
+        float deltaX = mouseState.X - screenCenterX;
+        float deltaY = mouseState.Y - screenCenterY;
 
         _yaw += deltaX * MouseSensitivity;
         _pitch -= deltaY * MouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
         Mouse.SetPosition(screenCenterX, screenCenterY);
-        var warped = Mouse.GetState();
-        _lastMouseX = warped.X;
-        _lastMouseY = warped.Y;
 
         UpdateVectors();
         UpdateViewMatrix();

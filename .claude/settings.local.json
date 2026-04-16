@@ -22,7 +22,9 @@
       "Bash(wget -q \"https://aka.ms/dotnet/8.0/dotnet-runtime-win-x64.zip\" -O /tmp/dotnet-win-x64.zip)",
       "Bash(jobs -l)",
       "Bash(xargs ls *)",
-      "Bash(start MinecraftClone.exe)"
+      "Bash(start MinecraftClone.exe)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(python3 *)"
     ]
   }
 }

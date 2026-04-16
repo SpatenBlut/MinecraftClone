@@ -9,8 +9,11 @@ namespace MinecraftClone.UI;
 
 public class PauseMenu
 {
-    private enum Screen { Main, Settings, Stats }
-    private Screen _screen;
+    private enum Screen     { Main, Settings, Stats }
+    private enum DragTarget { None, Sensitivity, Fov }
+
+    private Screen     _screen;
+    private DragTarget _dragging = DragTarget.None;
 
     private readonly SpriteFont     _font;
     private readonly Texture2D      _pixel;
@@ -34,8 +37,30 @@ public class PauseMenu
     private static readonly Color ColSep     = new Color(55,  62,  78);
 
     // ── Settings (Game1 reads and applies these) ──────────────────────────────
-    public float MouseSensitivity { get; set; } = 0.0006f;
-    public float Fov              { get; set; } = 75f;
+    // Sensitivity is stored internally as Minecraft % (0-200) and converted on get/set.
+    // Minecraft formula: s = pct/200, f = (s*0.6+0.2)^3 * 8, rad/px = f*0.15*(π/180)
+    private float _sensPct = 36f;   // ~0.0006 rad/px default
+
+    public float MouseSensitivity
+    {
+        get => SensPctToRad(_sensPct);
+        set => _sensPct = RadToSensPct(value);
+    }
+
+    private static float SensPctToRad(float pct)
+    {
+        float s = pct / 200f;
+        float f = s * 0.6f + 0.2f;
+        return f * f * f * 8.0f * 0.15f * (MathF.PI / 180f);
+    }
+
+    private static float RadToSensPct(float rad)
+    {
+        float cbrt = MathF.Cbrt(rad / (0.15f * (MathF.PI / 180f) * 8.0f));
+        return Math.Clamp((cbrt - 0.2f) / 0.6f * 200f, 0f, 200f);
+    }
+
+    public float Fov { get; set; } = 75f;
 
     // ── Single-frame intent flags ─────────────────────────────────────────────
     public bool WantsResume   { get; private set; }
@@ -75,7 +100,8 @@ public class PauseMenu
 
     public void Open()
     {
-        _screen = Screen.Main;
+        _screen   = Screen.Main;
+        _dragging = DragTarget.None;
         WantsResume = WantsMainMenu = WantsQuit = false;
     }
 
@@ -98,16 +124,18 @@ public class PauseMenu
             return;
         }
 
-        if (ms.LeftButton != ButtonState.Pressed || lastMs.LeftButton != ButtonState.Released) return;
-
         int mx = ms.X, my = ms.Y;
         int sw = _gd.Viewport.Width, sh = _gd.Viewport.Height;
 
+        bool clicked  = ms.LeftButton == ButtonState.Pressed  && lastMs.LeftButton == ButtonState.Released;
+        bool held     = ms.LeftButton == ButtonState.Pressed;
+        bool released = ms.LeftButton == ButtonState.Released  && lastMs.LeftButton == ButtonState.Pressed;
+
         switch (_screen)
         {
-            case Screen.Main:     HandleMain(mx, my, sw, sh);     break;
-            case Screen.Settings: HandleSettings(mx, my, sw, sh); break;
-            case Screen.Stats:    HandleStats(mx, my, sw, sh);    break;
+            case Screen.Main:     if (clicked) HandleMain(mx, my, sw, sh);                  break;
+            case Screen.Settings: HandleSettings(mx, my, sw, sh, clicked, held, released);  break;
+            case Screen.Stats:    if (clicked) HandleStats(mx, my, sw, sh);                  break;
         }
     }
 
@@ -179,14 +207,9 @@ public class PauseMenu
         return ((sw - PW) / 2, (sh - ph) / 2, ph);
     }
 
-    private (Rectangle dec, Rectangle inc) SmBtns(int wx, int ry)
-    {
-        int incX = wx + PW - 24 - SBW;
-        int decX = incX - SBW - 8;
-        int by   = ry + (RowH - SBH) / 2;
-        return (new Rectangle(decX, by, SBW, SBH),
-                new Rectangle(incX, by, SBW, SBH));
-    }
+    // Track rectangle for a slider row starting at (wx, ry)
+    private static Rectangle SliderTrack(int wx, int ry) =>
+        new Rectangle(wx + 22, ry + 36, PW - 44, 6);
 
     private void DrawSettings(SpriteBatch sb, int sw, int sh, int mx, int my)
     {
@@ -196,14 +219,10 @@ public class PauseMenu
 
         int ry = wy + TPad + TH;
 
-        var (sD, sI) = SmBtns(wx, ry);
-        DrawSettingRow(sb, wx, ry, "Mouse Sensitivity",
-            $"{MouseSensitivity * 10000f:F0}", sD, sI, mx, my);
+        DrawSlider(sb, wx, ry, "Mouse Sensitivity", $"{_sensPct:F0}%", _sensPct / 200f);
         ry += RowH;
 
-        var (fD, fI) = SmBtns(wx, ry);
-        DrawSettingRow(sb, wx, ry, "Field of View",
-            $"{Fov:F0}°", fD, fI, mx, my);
+        DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 40f) / 80f);
         ry += RowH + 20;
 
         int bx   = wx + (PW - BW) / 2;
@@ -211,23 +230,54 @@ public class PauseMenu
         DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
     }
 
-    private void HandleSettings(int mx, int my, int sw, int sh)
+    private void HandleSettings(int mx, int my, int sw, int sh,
+                                bool clicked, bool held, bool released)
     {
         var (wx, wy, _) = SettingsLayout(sw, sh);
-        int ry = wy + TPad + TH;
+        int ry0 = wy + TPad + TH;
+        int ry1 = ry0 + RowH;
 
-        var (sD, sI) = SmBtns(wx, ry);
-        if (sD.Contains(mx, my)) MouseSensitivity = MathF.Round(Math.Max(0.0001f, MouseSensitivity - 0.0001f), 4);
-        if (sI.Contains(mx, my)) MouseSensitivity = MathF.Round(Math.Min(0.0030f, MouseSensitivity + 0.0001f), 4);
-        ry += RowH;
+        var sensTrack = SliderTrack(wx, ry0);
+        var fovTrack  = SliderTrack(wx, ry1);
 
-        var (fD, fI) = SmBtns(wx, ry);
-        if (fD.Contains(mx, my)) Fov = Math.Max(40f, Fov - 5f);
-        if (fI.Contains(mx, my)) Fov = Math.Min(120f, Fov + 5f);
-        ry += RowH + 20;
+        // Expand hit area vertically so the full row is draggable
+        var sensHit = new Rectangle(sensTrack.X, ry0 + 4, sensTrack.Width, RowH - 8);
+        var fovHit  = new Rectangle(fovTrack.X,  ry1 + 4, fovTrack.Width,  RowH - 8);
 
-        int bx = wx + (PW - BW) / 2;
-        if (new Rectangle(bx, ry, BW, BH).Contains(mx, my)) _screen = Screen.Main;
+        if (clicked)
+        {
+            if      (sensHit.Contains(mx, my)) _dragging = DragTarget.Sensitivity;
+            else if (fovHit .Contains(mx, my)) _dragging = DragTarget.Fov;
+        }
+
+        if (released)
+            _dragging = DragTarget.None;
+
+        if (held)
+        {
+            if (_dragging == DragTarget.Sensitivity)
+            {
+                float t = Math.Clamp((mx - sensTrack.X) / (float)sensTrack.Width, 0f, 1f);
+                _sensPct = MathF.Round(t * 200f);
+            }
+            else if (_dragging == DragTarget.Fov)
+            {
+                float t = Math.Clamp((mx - fovTrack.X) / (float)fovTrack.Width, 0f, 1f);
+                Fov = MathF.Round(40f + t * 80f);
+            }
+        }
+
+        // Back button — click only
+        if (clicked)
+        {
+            int bx   = wx + (PW - BW) / 2;
+            int backY = ry1 + RowH + 20;
+            if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
+            {
+                _dragging = DragTarget.None;
+                _screen   = Screen.Main;
+            }
+        }
     }
 
     // ════════════════════════════ STATS ═══════════════════════════════════════
@@ -380,24 +430,34 @@ public class PauseMenu
         sb.Draw(_pixel, new Rectangle(wx + 18, sepY, PW - 36, 1), ColSep);
     }
 
-    private void DrawSettingRow(SpriteBatch sb, int wx, int ry,
-                                string label, string value,
-                                Rectangle dec, Rectangle inc, int mx, int my)
+    private void DrawSlider(SpriteBatch sb, int wx, int ry, string label, string value, float t)
     {
         sb.Draw(_pixel, new Rectangle(wx + 16, ry, PW - 32, 1), ColSep * 0.5f);
 
-        var lsz = _font.MeasureString(label) * FsLabel;
+        // Label (top-left)
         sb.DrawString(_font, label,
-            new Vector2(wx + 22, ry + (RowH - lsz.Y) / 2f),
+            new Vector2(wx + 22, ry + 10),
             ColText, 0, Vector2.Zero, FsLabel, SpriteEffects.None, 0);
 
+        // Value (top-right)
         var vsz = _font.MeasureString(value) * FsValue;
         sb.DrawString(_font, value,
-            new Vector2(dec.X - vsz.X - 14, ry + (RowH - vsz.Y) / 2f),
+            new Vector2(wx + PW - 22 - vsz.X, ry + 10),
             ColMuted, 0, Vector2.Zero, FsValue, SpriteEffects.None, 0);
 
-        DrawButton(sb, dec, "−", dec.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
-        DrawButton(sb, inc, "+", inc.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+        // Track background
+        var track = SliderTrack(wx, ry);
+        FillRounded(sb, track.X, track.Y, track.Width, track.Height, ColDark, 3);
+
+        // Filled portion
+        int fillW = Math.Max((int)(track.Width * t), 6);
+        FillRounded(sb, track.X, track.Y, fillW, track.Height, ColAccent * 0.85f, 3);
+
+        // Handle knob
+        const int HR = 7;
+        int hx = track.X + (int)(track.Width * t);
+        int hy = track.Y + track.Height / 2;
+        FillRounded(sb, hx - HR, hy - HR, HR * 2, HR * 2, ColText, HR);
     }
 
     private void DrawStatRow(SpriteBatch sb, int wx, int ry, string label, string value)
