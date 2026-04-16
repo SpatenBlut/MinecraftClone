@@ -106,6 +106,7 @@ public class Game1 : Game
 
         _player.Camera.MouseSensitivity = _pauseMenu.MouseSensitivity;
         _player.Camera.BaseFov          = _pauseMenu.Fov;
+        _pauseMenu.VSync                = _graphics.SynchronizeWithVerticalRetrace;
     }
 
     protected override void Update(GameTime gameTime)
@@ -170,6 +171,11 @@ public class Game1 : Game
 
             _player.Camera.MouseSensitivity = _pauseMenu.MouseSensitivity;
             _player.Camera.BaseFov          = _pauseMenu.Fov;
+            if (_pauseMenu.VSync != _graphics.SynchronizeWithVerticalRetrace)
+            {
+                _graphics.SynchronizeWithVerticalRetrace = _pauseMenu.VSync;
+                _graphics.ApplyChanges();
+            }
         }
 
         // ── E key: inventory ──────────────────────────────────────────────────

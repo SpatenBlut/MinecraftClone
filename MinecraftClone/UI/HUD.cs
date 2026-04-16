@@ -259,7 +259,7 @@ public class HUD
         }
 
         // ── Crafting-Label + 2×2 Grid (direkt rechts, Reihen 2+3) ───────────
-        DsLabel(sb, "Crafting", wx, wy, 202, 8, sc);
+        DsLabel(sb, "Crafting", wx, wy, 208, 14, sc);
         int[] cGx = { 202, 221, 202, 221 };
         int[] cGy = {  27,  27,  46,  46 };
         for (int i = 0; i < 4; i++)

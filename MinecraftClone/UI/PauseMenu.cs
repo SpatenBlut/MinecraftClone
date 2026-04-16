@@ -60,7 +60,8 @@ public class PauseMenu
         return Math.Clamp((cbrt - 0.2f) / 0.6f * 100f, 0f, 100f);
     }
 
-    public float Fov { get; set; } = 70f;
+    public float Fov    { get; set; } = 70f;
+    public bool  VSync  { get; set; } = false;
 
     // ── Single-frame intent flags ─────────────────────────────────────────────
     public bool WantsResume   { get; private set; }
@@ -164,10 +165,10 @@ public class PauseMenu
 
     private (int wx, int wy, int ph, Rectangle[] btns) MainLayout(int sw, int sh)
     {
-        int ph = TPad + TH + MainItems.Length * BH + (MainItems.Length - 1) * BGap + TPad;
+        int ph = TPad + MainItems.Length * BH + (MainItems.Length - 1) * BGap + TPad;
         int wx = (sw - PW) / 2, wy = (sh - ph) / 2;
         int bx = wx + (PW - BW) / 2;
-        int by = wy + TPad + TH;
+        int by = wy + TPad;
         var btns = new Rectangle[MainItems.Length];
         for (int i = 0; i < btns.Length; i++)
             btns[i] = new Rectangle(bx, by + i * (BH + BGap), BW, BH);
@@ -178,7 +179,6 @@ public class PauseMenu
     {
         var (wx, wy, ph, btns) = MainLayout(sw, sh);
         DrawPanel(sb, wx, wy, PW, ph);
-        DrawTitle(sb, "PAUSED", wx, wy);
 
         for (int i = 0; i < MainItems.Length; i++)
         {
@@ -203,7 +203,7 @@ public class PauseMenu
 
     private (int wx, int wy, int ph) SettingsLayout(int sw, int sh)
     {
-        int ph = TPad + TH + 2 * RowH + 20 + BH + TPad;
+        int ph = TPad + TH + 2 * RowH + 20 + BH + BGap + BH + TPad;
         return ((sw - PW) / 2, (sh - ph) / 2, ph);
     }
 
@@ -225,7 +225,13 @@ public class PauseMenu
         DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 30f) / 80f);
         ry += RowH + 20;
 
-        int bx   = wx + (PW - BW) / 2;
+        int bx     = wx + (PW - BW) / 2;
+        var vsync  = new Rectangle(bx, ry, BW, BH);
+        Color vsyncBg = VSync ? ColAccent * 0.6f : ColBtn;
+        DrawButton(sb, vsync, VSync ? "VSync: ON" : "VSync: OFF",
+            vsync.Contains(mx, my) ? (VSync ? ColAccent * 0.8f : ColBtnHov) : vsyncBg, ColText);
+        ry += BH + BGap;
+
         var back = new Rectangle(bx, ry, BW, BH);
         DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
     }
@@ -267,12 +273,15 @@ public class PauseMenu
             }
         }
 
-        // Back button — click only
+        // VSync + Back buttons — click only
         if (clicked)
         {
-            int bx   = wx + (PW - BW) / 2;
-            int backY = ry1 + RowH + 20;
-            if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
+            int bx     = wx + (PW - BW) / 2;
+            int vsyncY = ry1 + RowH + 20;
+            int backY  = vsyncY + BH + BGap;
+            if (new Rectangle(bx, vsyncY, BW, BH).Contains(mx, my))
+                VSync = !VSync;
+            else if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
             {
                 _dragging = DragTarget.None;
                 _screen   = Screen.Main;
