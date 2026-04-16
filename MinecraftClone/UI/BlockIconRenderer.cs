@@ -18,7 +18,7 @@ public sealed class BlockIconRenderer : IDisposable
     private readonly BasicEffect    _effect;
     private readonly Dictionary<BlockType, RenderTarget2D> _cache = new();
 
-    public const int IconSize = 64;
+    public const int IconSize = 128;
 
     public BlockIconRenderer(GraphicsDevice gd, Texture2D atlas)
     {

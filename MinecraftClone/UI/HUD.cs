@@ -67,7 +67,7 @@ public class HUD
             ? (float)(1.0 / gameTime.ElapsedGameTime.TotalSeconds) : _smoothFps;
         _smoothFps = _smoothFps * 0.85f + fps * 0.15f;
 
-        sb.Begin(samplerState: SamplerState.PointClamp);
+        sb.Begin();
 
         if (!inventoryOpen)
             DrawCrosshair(sb, screenWidth, screenHeight);
@@ -180,23 +180,15 @@ public class HUD
     // ── Erhobenes Panel (Dark Steel) ─────────────────────────────────────────
     private void DsPanel(SpriteBatch sb, int x, int y, int w, int h, int sc)
     {
-        int b = 2 * sc;
         sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsBg);
-        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), DsLight);
-        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), DsDark);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), DsLight);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), DsDark);
+        DrawOutline(sb, new Rectangle(x, y, w, h), Color.White * 0.15f, 1);
     }
 
-    // ── Vertiefter Slot (Dark Steel) ─────────────────────────────────────────
+    // ── Slot ─────────────────────────────────────────────────────────────────
     private void DsSlotDraw(SpriteBatch sb, int x, int y, int w, int h, bool hovered, int sc)
     {
-        int b = sc;
         sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsSlot);
-        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), DsDark);
-        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), DsLight);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), DsDark);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), DsLight);
+        DrawOutline(sb, new Rectangle(x, y, w, h), Color.White * 0.15f, 1);
         if (hovered)
             sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), Color.White * 0.25f);
     }
@@ -260,8 +252,6 @@ public class HUD
             int gx = 28 + col * 19;
             bool hov = R(wx, wy, gx, 69, 18, 18, sc).Contains(mx, my);
             SlotG(sb, wx, wy, gx, 69, sc, hov);
-            if (col == inv.SelectedSlot)
-                DrawOutline(sb, R(wx, wy, gx, 69, 18, 18, sc), DsSel, sc);
             var item = inv.GetSlot(col);
             if (!item.IsEmpty) DrawIconMc(sb, item, R(wx, wy, gx, 69, 18, 18, sc), sc);
         }

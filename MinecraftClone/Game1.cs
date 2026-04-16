@@ -16,29 +16,38 @@ public class Game1 : Game
     private SpriteBatch _spriteBatch;
 
     private World.World _world;
-    private Player _player;
-    private Inventory _inventory;
-    private ChunkMesh _chunkMesh;
-    private HUD _hud;
+    private Player      _player;
+    private Inventory   _inventory;
+    private ChunkMesh   _chunkMesh;
+    private HUD         _hud;
+    private PauseMenu   _pauseMenu;
 
     private BlockEffect _basicEffect;
-    private Texture2D _blockAtlas;
-    private SpriteFont _font;
+    private Texture2D   _blockAtlas;
+    private SpriteFont  _font;
 
     // Sky
-    private Texture2D _skyGradient; // 1x2: Zenit (oben) → Horizont (unten)
+    private Texture2D _skyGradient;
     private Texture2D _sunTexture;
-    private static readonly Color SkyZenith  = new Color(120, 167, 255); // Minecraft Plains Zenit  #78A7FF
-    private static readonly Color SkyHorizon = new Color(192, 216, 255); // Minecraft Plains Horizont #C0D8FF
+    private static readonly Color SkyZenith  = new Color(120, 167, 255);
+    private static readonly Color SkyHorizon = new Color(192, 216, 255);
     private static readonly Vector3 SunDirection = Vector3.Normalize(new Vector3(0.5f, 0.85f, 0.3f));
 
+    // State
     private bool _needsMeshRebuild = false;
     private bool _inventoryOpen    = false;
-    private KeyboardState _lastKeyState;
-    private MouseState _lastMouseState;
+    private bool _paused           = false;
 
-    // 20 TPS Tick-System (wie Minecraft)
-    private const double TickInterval = 1.0 / 20.0; // 50ms pro Tick
+    private KeyboardState _lastKeyState;
+    private MouseState    _lastMouseState;
+
+    // Stats
+    private int    _blocksPlaced = 0;
+    private int    _blocksBroken = 0;
+    private double _playTimeSec  = 0.0;
+
+    // 20 TPS Tick-System
+    private const double TickInterval = 1.0 / 20.0;
     private double _tickAccumulator = 0.0;
 
     public Game1()
@@ -46,15 +55,14 @@ public class Game1 : Game
         _graphics = new GraphicsDeviceManager(this);
         Content.RootDirectory = "Content";
 
-        // Fullscreen Exclusive Mode
         _graphics.IsFullScreen = true;
         _graphics.HardwareModeSwitch = true;
-        _graphics.PreferredBackBufferWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+        _graphics.PreferredBackBufferWidth  = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
         _graphics.SynchronizeWithVerticalRetrace = false;
         _graphics.ApplyChanges();
 
-        IsMouseVisible = false;
+        IsMouseVisible  = false;
         IsFixedTimeStep = false;
     }
 
@@ -74,8 +82,7 @@ public class Game1 : Game
             _world.SaveToFile(worldPath);
         }
 
-        float aspectRatio = GraphicsDevice.Viewport.AspectRatio;
-        _player = new Player(new Vector3(32, 10, 32), aspectRatio);
+        _player    = new Player(new Vector3(32, 10, 32), GraphicsDevice.Viewport.AspectRatio);
         _inventory = new Inventory();
         _chunkMesh = new ChunkMesh(GraphicsDevice);
 
@@ -90,8 +97,8 @@ public class Game1 : Game
         _sunTexture  = Content.Load<Texture2D>("Textures/sun");
         _font        = Content.Load<SpriteFont>("Font");
         _hud         = new HUD(GraphicsDevice, _font, _blockAtlas);
+        _pauseMenu   = new PauseMenu(GraphicsDevice, _font);
 
-        // Sky-Gradient: 1×2 Pixel — bilineares Strecken ergibt sauberen Farbverlauf
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
 
@@ -100,37 +107,78 @@ public class Game1 : Game
 
     protected override void Update(GameTime gameTime)
     {
-        var keyState = Keyboard.GetState();
+        var keyState   = Keyboard.GetState();
+        var mouseState = Mouse.GetState();
 
-        if (keyState.IsKeyDown(Keys.Escape))
+        // ── ESC handling (edge-triggered) ─────────────────────────────────────
+        if (keyState.IsKeyDown(Keys.Escape) && _lastKeyState.IsKeyUp(Keys.Escape))
         {
             if (_inventoryOpen)
             {
                 _inventoryOpen = false;
-                IsMouseVisible = false;
                 _inventory.ReturnCursorStack();
                 _player.Camera.ResetMouseLock();
             }
-            else
+            else if (!_paused)
             {
-                Exit();
+                _paused = true;
+                _pauseMenu.MouseSensitivity = _player.Camera.MouseSensitivity;
+                _pauseMenu.Fov              = _player.Camera.BaseFov;
+                _pauseMenu.Open();
+                // Consume this ESC press so PauseMenu.Update() doesn't see it
+                // as a "resume" edge on the very same frame
+                _lastKeyState   = keyState;
+                _lastMouseState = mouseState;
+                base.Update(gameTime);
+                return;
             }
+            // If already paused: PauseMenu.Update() handles ESC below
         }
 
+        // ── Window focus lost ─────────────────────────────────────────────────
         if (!IsActive)
         {
             IsMouseVisible = true;
             _player.Camera.ResetMouseLock();
+            _lastKeyState   = keyState;
+            _lastMouseState = mouseState;
             base.Update(gameTime);
             return;
         }
-        IsMouseVisible = _inventoryOpen;
 
-        // E-Taste: Inventar öffnen / schließen
+        // ── Mouse visibility ──────────────────────────────────────────────────
+        IsMouseVisible = _inventoryOpen || _paused;
+
+        // ── Pause menu ────────────────────────────────────────────────────────
+        if (_paused)
+        {
+            _pauseMenu.Update(_blocksPlaced, _blocksBroken, (float)_playTimeSec,
+                mouseState, _lastMouseState, keyState, _lastKeyState);
+
+            if (_pauseMenu.WantsResume)
+            {
+                _paused = false;
+                _player.Camera.ResetMouseLock();
+            }
+            else if (_pauseMenu.WantsMainMenu || _pauseMenu.WantsQuit)
+            {
+                Exit();
+            }
+
+            // Apply settings live
+            _player.Camera.MouseSensitivity = _pauseMenu.MouseSensitivity;
+            _player.Camera.BaseFov          = _pauseMenu.Fov;
+
+            _lastKeyState   = keyState;
+            _lastMouseState = mouseState;
+            base.Update(gameTime);
+            return;
+        }
+
+        // ── E key: inventory ──────────────────────────────────────────────────
         if (keyState.IsKeyDown(Keys.E) && _lastKeyState.IsKeyUp(Keys.E))
         {
             _inventoryOpen = !_inventoryOpen;
-            IsMouseVisible = _inventoryOpen;
             if (!_inventoryOpen)
             {
                 _inventory.ReturnCursorStack();
@@ -138,67 +186,63 @@ public class Game1 : Game
             }
         }
 
-        var mouseState = Mouse.GetState();
+        // ── Play time (only while actually playing) ───────────────────────────
+        _playTimeSec += gameTime.ElapsedGameTime.TotalSeconds;
 
+        // ── Inventory open ────────────────────────────────────────────────────
         if (_inventoryOpen)
         {
-            // ── Inventar offen: Mausklicks auf Slots weiterleiten ──────────────
             int slotIdx = _hud.GetInventorySlotAt(
                 mouseState.X, mouseState.Y,
                 GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height);
 
             bool shiftHeld = keyState.IsKeyDown(Keys.LeftShift) || keyState.IsKeyDown(Keys.RightShift);
 
-            if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
-            {
+            if (mouseState.LeftButton  == ButtonState.Pressed && _lastMouseState.LeftButton  == ButtonState.Released)
                 if (slotIdx >= 0) _inventory.OnSlotLeftClick(slotIdx, shiftHeld);
-            }
             if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
-            {
                 if (slotIdx >= 0) _inventory.OnSlotRightClick(slotIdx);
-            }
 
-            // Physik weiterführen, aber keine Spieler-Eingabe
             _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
-            int ticksInv = 0;
-            while (_tickAccumulator >= TickInterval && ticksInv < 5)
+            int ticks = 0;
+            while (_tickAccumulator >= TickInterval && ticks < 5)
             {
                 _player.SaveTickState();
                 _player.Tick((float)TickInterval, _world, inputEnabled: false);
                 _tickAccumulator -= TickInterval;
-                ticksInv++;
+                ticks++;
             }
-            float alphaInv   = (float)(_tickAccumulator / TickInterval);
-            float dtInv      = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            _player.SetRenderPosition(alphaInv, dtInv);
+            float alphaInv = (float)(_tickAccumulator / TickInterval);
+            _player.SetRenderPosition(alphaInv, (float)gameTime.ElapsedGameTime.TotalSeconds);
             _player.Camera.RefreshViewMatrix();
         }
+        // ── Normal gameplay ───────────────────────────────────────────────────
         else
         {
-            // ── Normales Gameplay ──────────────────────────────────────────────
             _player.PollInput();
 
             _tickAccumulator += gameTime.ElapsedGameTime.TotalSeconds;
-
-            int ticksThisFrame = 0;
-            while (_tickAccumulator >= TickInterval && ticksThisFrame < 5)
+            int ticks = 0;
+            while (_tickAccumulator >= TickInterval && ticks < 5)
             {
                 _player.SaveTickState();
                 _player.Tick((float)TickInterval, _world);
                 _inventory.Update(keyState, mouseState.ScrollWheelValue);
                 _tickAccumulator -= TickInterval;
-                ticksThisFrame++;
+                ticks++;
             }
 
-            float alpha     = (float)(_tickAccumulator / TickInterval);
-            float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            _player.SetRenderPosition(alpha, deltaTime);
+            float alpha = (float)(_tickAccumulator / TickInterval);
+            _player.SetRenderPosition(alpha, (float)gameTime.ElapsedGameTime.TotalSeconds);
             _player.UpdateCamera(gameTime, GraphicsDevice);
 
             if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
             {
                 if (_player.TryBreakBlock(_world, out _, out _))
+                {
+                    _blocksBroken++;
                     _needsMeshRebuild = true;
+                }
             }
 
             if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
@@ -206,6 +250,7 @@ public class Game1 : Game
                 if (_player.TryPlaceBlock(_world, _inventory.SelectedBlock, out _))
                 {
                     _inventory.ConsumeFromSelected();
+                    _blocksPlaced++;
                     _needsMeshRebuild = true;
                 }
             }
@@ -234,21 +279,20 @@ public class Game1 : Game
         int screenW = GraphicsDevice.Viewport.Width;
         int screenH = GraphicsDevice.Viewport.Height;
 
-        // 1) Farbpuffer + Tiefenpuffer leeren
         GraphicsDevice.Clear(Color.Black);
 
-        // 2a) Sky-Gradient
+        // Sky gradient
         _spriteBatch.Begin(samplerState: SamplerState.LinearClamp);
         _spriteBatch.Draw(_skyGradient, new Rectangle(0, 0, screenW, screenH), Color.White);
         _spriteBatch.End();
 
-        // 2b) Sonne mit Additive Blending (kein schwarzes Kästchen, so wie Minecraft)
+        // Sun (additive)
         _spriteBatch.Begin(blendState: BlendState.Additive, samplerState: SamplerState.PointClamp);
         DrawSun2D(screenW, screenH);
         _spriteBatch.End();
 
-        // 3) 3D Welt (überschreibt Sky wo Geometrie ist)
-        GraphicsDevice.BlendState        = BlendState.Opaque;           // nach Additive-SpriteBatch zurücksetzen
+        // 3D world
+        GraphicsDevice.BlendState        = BlendState.Opaque;
         GraphicsDevice.DepthStencilState = DepthStencilState.Default;
         GraphicsDevice.RasterizerState   = RasterizerState.CullCounterClockwise;
 
@@ -257,9 +301,7 @@ public class Game1 : Game
         _basicEffect.Projection     = _player.Camera.ProjectionMatrix;
         _basicEffect.Texture        = _blockAtlas;
         _basicEffect.CameraPosition = _player.Camera.Position;
-        // Minecraft Java Beleuchtung: fixe Flächen-Multiplikatoren + AO (kein Hemi/Directional)
         _basicEffect.DayBrightness  = 1.0f;
-        // Nebel passend zur Horizont-Himmelfarbe
         _basicEffect.FogColor       = SkyHorizon.ToVector3();
         _basicEffect.FogStart       = 48f;
         _basicEffect.FogEnd         = 90f;
@@ -267,27 +309,33 @@ public class Game1 : Game
 
         _chunkMesh.Draw();
 
-        // 4) HUD
+        // HUD
         var ms = Mouse.GetState();
         _hud.Draw(_spriteBatch, _player, _inventory, screenW, screenH, gameTime,
             _inventoryOpen, ms.X, ms.Y);
 
+        // Pause menu overlay
+        if (_paused)
+        {
+            _spriteBatch.Begin();
+            _pauseMenu.Draw(_spriteBatch, _player, screenW, screenH, ms.X, ms.Y);
+            _spriteBatch.End();
+        }
+
         base.Draw(gameTime);
     }
 
-    // Sonne als 2D-Projektion aus 3D-Richtungsvektor
     private void DrawSun2D(int screenW, int screenH)
     {
         Vector3 sunWorldPos = _player.Camera.Position + SunDirection * 500f;
         Matrix viewProj = _player.Camera.ViewMatrix * _player.Camera.ProjectionMatrix;
         Vector4 clip = Vector4.Transform(new Vector4(sunWorldPos, 1f), viewProj);
 
-        if (clip.W <= 0f) return; // hinter der Kamera
+        if (clip.W <= 0f) return;
 
         float ndcX =  clip.X / clip.W;
         float ndcY = -clip.Y / clip.W;
 
-        // Nur zeichnen wenn annähernd auf dem Bildschirm
         if (ndcX < -1.5f || ndcX > 1.5f || ndcY < -1.5f || ndcY > 1.5f) return;
 
         int sx = (int)((ndcX + 1f) * 0.5f * screenW);

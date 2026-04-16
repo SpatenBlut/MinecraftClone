@@ -2,275 +2,336 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using MinecraftClone.Core;
+using MinecraftClone.Gameplay;
 
 namespace MinecraftClone.UI;
 
-public enum PauseMenuAction { None, Resume, SaveWorld, Quit }
-
 public class PauseMenu
 {
-    public bool IsOpen { get; private set; }
+    private enum Screen { Main, Settings, Stats }
+    private Screen _screen;
 
-    private enum Screen { Main, Settings }
-    private Screen _screen = Screen.Main;
+    private readonly SpriteFont     _font;
+    private readonly Texture2D      _pixel;
+    private readonly GraphicsDevice _gd;
 
-    private SpriteFont _font;
-    private Texture2D  _pixel;
+    // ── Dark‑Steel palette ────────────────────────────────────────────────────
+    private static readonly Color ColOverlay = new Color(0,   0,   0,   185);
+    private static readonly Color ColPanel   = new Color(26,  30,  38);
+    private static readonly Color ColBtn     = new Color(42,  48,  60);
+    private static readonly Color ColBtnHov  = new Color(60,  68,  86);
+    private static readonly Color ColBtnRed  = new Color(70,  26,  26);
+    private static readonly Color ColBtnRedH = new Color(98,  36,  36);
+    private static readonly Color ColLight   = new Color(88,  100, 120);
+    private static readonly Color ColDark    = new Color(12,  14,  18);
+    private static readonly Color ColText    = new Color(215, 225, 235);
+    private static readonly Color ColMuted   = new Color(138, 152, 168);
+    private static readonly Color ColAccent  = new Color(96,  176, 255);
+    private static readonly Color ColSep     = new Color(55,  62,  78);
 
-    // Konstanten
-    private const int BtnW      = 280;
-    private const int BtnH      = 44;
-    private const int BtnSpacing = 10;
-    private const int PanelPadX  = 32;
-    private const int PanelPadY  = 24;
+    // ── Settings (Game1 reads and applies these) ──────────────────────────────
+    public float MouseSensitivity { get; set; } = 0.0006f;
+    public float Fov              { get; set; } = 75f;
 
-    public PauseMenu(GraphicsDevice graphicsDevice, SpriteFont font)
+    // ── Single-frame intent flags ─────────────────────────────────────────────
+    public bool WantsResume   { get; private set; }
+    public bool WantsMainMenu { get; private set; }
+    public bool WantsQuit     { get; private set; }
+
+    private int   _blocksPlaced;
+    private int   _blocksBroken;
+    private float _playTimeSec;
+
+    // ── Layout constants ──────────────────────────────────────────────────────
+    private const int PW   = 440;   // panel width
+    private const int BW   = 362;   // button width
+    private const int BH   = 54;    // button height
+    private const int BGap = 10;    // gap between buttons
+    private const int TPad = 28;    // top/bottom padding inside panel
+    private const int TH   = 54;    // title area height
+    private const int RowH = 62;    // settings row height
+    private const int SBW  = 40;    // small +/- button width
+    private const int SBH  = 36;    // small +/- button height
+    private const int StH  = 36;    // stats row height
+
+    // ── Font scales ───────────────────────────────────────────────────────────
+    private const float FsTitle = 0.78f;
+    private const float FsBtn   = 0.52f;
+    private const float FsLabel = 0.42f;
+    private const float FsValue = 0.40f;
+    private const float FsStat  = 0.38f;
+
+    public PauseMenu(GraphicsDevice gd, SpriteFont font)
     {
-        _font  = font;
-        _pixel = new Texture2D(graphicsDevice, 1, 1);
+        _gd   = gd;
+        _font = font;
+        _pixel = new Texture2D(gd, 1, 1);
         _pixel.SetData(new[] { Color.White });
     }
 
     public void Open()
     {
-        IsOpen  = true;
         _screen = Screen.Main;
+        WantsResume = WantsMainMenu = WantsQuit = false;
     }
 
-    public void Close() => IsOpen = false;
+    // ── Update ────────────────────────────────────────────────────────────────
 
-    // ── Update: Mausklicks auswerten, Action zurückgeben ─────────────────────
-
-    public PauseMenuAction Update(MouseState mouse, MouseState lastMouse,
-        int screenWidth, int screenHeight, Camera camera)
+    public void Update(int blocksPlaced, int blocksBroken, float playTimeSec,
+                       MouseState ms, MouseState lastMs,
+                       KeyboardState ks, KeyboardState lastKs)
     {
-        if (!IsOpen) return PauseMenuAction.None;
+        _blocksPlaced = blocksPlaced;
+        _blocksBroken = blocksBroken;
+        _playTimeSec  = playTimeSec;
+        WantsResume = WantsMainMenu = WantsQuit = false;
 
-        bool clicked = mouse.LeftButton == ButtonState.Pressed
-                    && lastMouse.LeftButton == ButtonState.Released;
-        int mx = mouse.X, my = mouse.Y;
-
-        if (_screen == Screen.Main)
+        // ESC: navigate back or resume
+        if (ks.IsKeyDown(Keys.Escape) && lastKs.IsKeyUp(Keys.Escape))
         {
-            var btns = GetMainButtons(screenWidth, screenHeight);
-
-            if (clicked)
-            {
-                if (btns[0].Contains(mx, my)) { Close(); return PauseMenuAction.Resume;    }
-                if (btns[1].Contains(mx, my)) { _screen = Screen.Settings;                  }
-                if (btns[2].Contains(mx, my)) { Close(); return PauseMenuAction.SaveWorld;  }
-                if (btns[3].Contains(mx, my)) { Close(); return PauseMenuAction.Quit;       }
-            }
-        }
-        else // Settings
-        {
-            HandleSettingsClicks(mx, my, clicked, screenWidth, screenHeight, camera);
+            if (_screen != Screen.Main) _screen = Screen.Main;
+            else WantsResume = true;
+            return;
         }
 
-        return PauseMenuAction.None;
-    }
+        if (ms.LeftButton != ButtonState.Pressed || lastMs.LeftButton != ButtonState.Released) return;
 
-    // ── Draw ─────────────────────────────────────────────────────────────────
+        int mx = ms.X, my = ms.Y;
+        int sw = _gd.Viewport.Width, sh = _gd.Viewport.Height;
 
-    public void Draw(SpriteBatch sb, int screenWidth, int screenHeight, Camera camera)
-    {
-        if (!IsOpen) return;
-
-        // Dunkles Overlay
-        sb.Draw(_pixel, new Rectangle(0, 0, screenWidth, screenHeight), Color.Black * 0.55f);
-
-        if (_screen == Screen.Main)
-            DrawMain(sb, screenWidth, screenHeight);
-        else
-            DrawSettings(sb, screenWidth, screenHeight, camera);
-    }
-
-    // ── Hauptmenü ────────────────────────────────────────────────────────────
-
-    private Rectangle[] GetMainButtons(int sw, int sh)
-    {
-        string[] labels = { "Weiterspielen", "Einstellungen", "Welt speichern", "Spiel beenden" };
-        int totalH = labels.Length * BtnH + (labels.Length - 1) * BtnSpacing;
-        int panelW = BtnW + 2 * PanelPadX;
-        int panelH = 40 + totalH + 2 * PanelPadY; // 40 = title height
-        int panelX = (sw - panelW) / 2;
-        int panelY = (sh - panelH) / 2;
-
-        var rects = new Rectangle[labels.Length];
-        int startY = panelY + PanelPadY + 40;
-        for (int i = 0; i < labels.Length; i++)
-            rects[i] = new Rectangle(panelX + PanelPadX, startY + i * (BtnH + BtnSpacing), BtnW, BtnH);
-        return rects;
-    }
-
-    private void DrawMain(SpriteBatch sb, int sw, int sh)
-    {
-        string[] labels = { "Weiterspielen", "Einstellungen", "Welt speichern", "Spiel beenden" };
-        var btns = GetMainButtons(sw, sh);
-
-        // Panel
-        int panelW = BtnW + 2 * PanelPadX;
-        int totalH = labels.Length * BtnH + (labels.Length - 1) * BtnSpacing;
-        int panelH = 40 + totalH + 2 * PanelPadY;
-        int panelX = (sw - panelW) / 2;
-        int panelY = (sh - panelH) / 2;
-        DrawPanel(sb, new Rectangle(panelX, panelY, panelW, panelH));
-
-        // Titel
-        DrawCenteredText(sb, "Pausenmenü", panelX, panelY + 8, panelW, 1.1f, Color.White);
-
-        // Buttons
-        var ms = Mouse.GetState();
-        for (int i = 0; i < labels.Length; i++)
+        switch (_screen)
         {
-            Color btnColor = i == 3 ? new Color(130, 40, 40) : new Color(65, 65, 65); // Quit rot
-            DrawButton(sb, labels[i], btns[i], ms.X, ms.Y, btnColor);
+            case Screen.Main:     HandleMain(mx, my, sw, sh);     break;
+            case Screen.Settings: HandleSettings(mx, my, sw, sh); break;
+            case Screen.Stats:    HandleStats(mx, my, sw, sh);    break;
         }
     }
 
-    // ── Einstellungen ────────────────────────────────────────────────────────
+    // ── Draw ──────────────────────────────────────────────────────────────────
 
-    private void HandleSettingsClicks(int mx, int my, bool clicked,
-        int sw, int sh, Camera camera)
+    public void Draw(SpriteBatch sb, Player player, int sw, int sh, int mx, int my)
     {
-        var layout = GetSettingsLayout(sw, sh);
-        if (!clicked) return;
-
-        // Maus-Sensitivität
-        if (layout.SensDown.Contains(mx, my))
-            camera.MouseSensitivity = Math.Max(0.0001f, camera.MouseSensitivity - 0.0001f);
-        if (layout.SensUp.Contains(mx, my))
-            camera.MouseSensitivity = Math.Min(0.005f, camera.MouseSensitivity + 0.0001f);
-
-        // FOV
-        if (layout.FovDown.Contains(mx, my))
-            camera.BaseFov = Math.Max(50f, camera.BaseFov - 5f);
-        if (layout.FovUp.Contains(mx, my))
-            camera.BaseFov = Math.Min(120f, camera.BaseFov + 5f);
-
-        // Zurück
-        if (layout.Back.Contains(mx, my))
-            _screen = Screen.Main;
+        sb.Draw(_pixel, new Rectangle(0, 0, sw, sh), ColOverlay);
+        switch (_screen)
+        {
+            case Screen.Main:     DrawMain(sb, sw, sh, mx, my);          break;
+            case Screen.Settings: DrawSettings(sb, sw, sh, mx, my);      break;
+            case Screen.Stats:    DrawStats(sb, player, sw, sh, mx, my); break;
+        }
     }
 
-    private record SettingsLayout(
-        Rectangle SensDown, Rectangle SensUp,
-        Rectangle FovDown,  Rectangle FovUp,
-        Rectangle Back);
+    // ═══════════════════════════════ MAIN ════════════════════════════════════
 
-    private SettingsLayout GetSettingsLayout(int sw, int sh)
+    private static readonly (string Label, bool Danger, bool Accent)[] MainItems =
     {
-        int panelW = BtnW + 2 * PanelPadX;
-        int panelH = 220;
-        int panelX = (sw - panelW) / 2;
-        int panelY = (sh - panelH) / 2;
+        ("Resume",     false, true ),
+        ("Settings",   false, false),
+        ("Statistics", false, false),
+        ("Main Menu",  false, false),
+        ("Quit Game",  true,  false),
+    };
 
-        int rowY1 = panelY + PanelPadY + 44;
-        int rowY2 = rowY1 + 60;
-        int backY = panelY + panelH - PanelPadY - BtnH;
-        int cx    = panelX + PanelPadX;
-
-        int arrowW = 38;
-        int valW   = BtnW - 2 * (arrowW + 6);
-
-        var sensDown = new Rectangle(cx,                         rowY1, arrowW, BtnH);
-        var sensUp   = new Rectangle(cx + arrowW + 6 + valW + 6, rowY1, arrowW, BtnH);
-        var fovDown  = new Rectangle(cx,                         rowY2, arrowW, BtnH);
-        var fovUp    = new Rectangle(cx + arrowW + 6 + valW + 6, rowY2, arrowW, BtnH);
-        var back     = new Rectangle(cx,                         backY, BtnW,   BtnH);
-
-        return new SettingsLayout(sensDown, sensUp, fovDown, fovUp, back);
+    private (int wx, int wy, int ph, Rectangle[] btns) MainLayout(int sw, int sh)
+    {
+        int ph = TPad + TH + MainItems.Length * BH + (MainItems.Length - 1) * BGap + TPad;
+        int wx = (sw - PW) / 2, wy = (sh - ph) / 2;
+        int bx = wx + (PW - BW) / 2;
+        int by = wy + TPad + TH;
+        var btns = new Rectangle[MainItems.Length];
+        for (int i = 0; i < btns.Length; i++)
+            btns[i] = new Rectangle(bx, by + i * (BH + BGap), BW, BH);
+        return (wx, wy, ph, btns);
     }
 
-    private void DrawSettings(SpriteBatch sb, int sw, int sh, Camera camera)
+    private void DrawMain(SpriteBatch sb, int sw, int sh, int mx, int my)
     {
-        int panelW = BtnW + 2 * PanelPadX;
-        int panelH = 220;
-        int panelX = (sw - panelW) / 2;
-        int panelY = (sh - panelH) / 2;
-        DrawPanel(sb, new Rectangle(panelX, panelY, panelW, panelH));
+        var (wx, wy, ph, btns) = MainLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "PAUSED", wx, wy);
 
-        DrawCenteredText(sb, "Einstellungen", panelX, panelY + 8, panelW, 1.1f, Color.White);
-
-        var layout = GetSettingsLayout(sw, sh);
-        var ms     = Mouse.GetState();
-
-        int arrowW = 38;
-        int valW   = BtnW - 2 * (arrowW + 6);
-        int cx     = panelX + PanelPadX;
-
-        // Zeile 1: Maus-Sensitivität
-        int sensPercent = (int)Math.Round(camera.MouseSensitivity / 0.0006f * 100f);
-        DrawSettingsRow(sb, ms, "Maus-Sensitivität", $"{sensPercent}%",
-            layout.SensDown, layout.SensUp, cx, layout.SensDown.Y, arrowW, valW);
-
-        // Zeile 2: FOV
-        DrawSettingsRow(sb, ms, "Sichtfeld (FOV)", $"{(int)camera.BaseFov}°",
-            layout.FovDown, layout.FovUp, cx, layout.FovDown.Y, arrowW, valW);
-
-        // Zurück-Button
-        DrawButton(sb, "← Zurück", layout.Back, ms.X, ms.Y, new Color(65, 65, 65));
+        for (int i = 0; i < MainItems.Length; i++)
+        {
+            var (label, danger, accent) = MainItems[i];
+            bool hov  = btns[i].Contains(mx, my);
+            Color bg   = danger ? (hov ? ColBtnRedH : ColBtnRed) : hov ? ColBtnHov : ColBtn;
+            Color text = accent ? ColAccent : ColText;
+            DrawButton(sb, btns[i], label, bg, text);
+        }
     }
 
-    private void DrawSettingsRow(SpriteBatch sb, MouseState ms,
-        string label, string value,
-        Rectangle downBtn, Rectangle upBtn,
-        int cx, int rowY, int arrowW, int valW)
+    private void HandleMain(int mx, int my, int sw, int sh)
     {
-        // Label über der Zeile
-        spriteBatchDrawLabel(sb, label, cx, rowY - 18);
-
-        DrawButton(sb, "<", downBtn, ms.X, ms.Y, new Color(65, 65, 65));
-
-        // Wert-Anzeige (mittig)
-        var valRect = new Rectangle(downBtn.Right + 6, rowY, valW, BtnH);
-        sb.Draw(_pixel, valRect, new Color(45, 45, 45));
-        DrawRectOutline(sb, valRect, new Color(80, 80, 80), 1);
-        DrawCenteredText(sb, value, valRect.X, valRect.Y + 12, valRect.Width, 0.85f, Color.White);
-
-        DrawButton(sb, ">", upBtn, ms.X, ms.Y, new Color(65, 65, 65));
+        var (_, _, _, btns) = MainLayout(sw, sh);
+        if      (btns[0].Contains(mx, my)) WantsResume   = true;
+        else if (btns[1].Contains(mx, my)) _screen       = Screen.Settings;
+        else if (btns[2].Contains(mx, my)) _screen       = Screen.Stats;
+        else if (btns[3].Contains(mx, my)) WantsMainMenu = true;
+        else if (btns[4].Contains(mx, my)) WantsQuit     = true;
     }
 
-    private void spriteBatchDrawLabel(SpriteBatch sb, string text, int x, int y)
+    // ══════════════════════════ SETTINGS ══════════════════════════════════════
+
+    private (int wx, int wy, int ph) SettingsLayout(int sw, int sh)
     {
-        sb.DrawString(_font, text, new Vector2(x, y),
-            new Color(180, 180, 180), 0f, Vector2.Zero, 0.65f, SpriteEffects.None, 0f);
+        int ph = TPad + TH + 2 * RowH + 20 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
     }
 
-    // ── Zeichen-Helfer ───────────────────────────────────────────────────────
-
-    private void DrawPanel(SpriteBatch sb, Rectangle rect)
+    private (Rectangle dec, Rectangle inc) SmBtns(int wx, int ry)
     {
-        sb.Draw(_pixel, rect, new Color(38, 38, 38) * 0.97f);
-        DrawRectOutline(sb, rect, new Color(90, 90, 90), 2);
+        int incX = wx + PW - 24 - SBW;
+        int decX = incX - SBW - 8;
+        int by   = ry + (RowH - SBH) / 2;
+        return (new Rectangle(decX, by, SBW, SBH),
+                new Rectangle(incX, by, SBW, SBH));
     }
 
-    private void DrawButton(SpriteBatch sb, string label, Rectangle rect, int mx, int my, Color baseColor)
+    private void DrawSettings(SpriteBatch sb, int sw, int sh, int mx, int my)
     {
-        bool hovered = rect.Contains(mx, my);
-        Color bg = hovered
-            ? new Color(baseColor.R + 30, baseColor.G + 30, baseColor.B + 30)
-            : baseColor;
-        sb.Draw(_pixel, rect, bg);
-        DrawRectOutline(sb, rect, hovered ? Color.White : new Color(100, 100, 100), 1);
-        DrawCenteredText(sb, label, rect.X, rect.Y + rect.Height / 2 - 10, rect.Width, 0.8f, Color.White);
+        var (wx, wy, ph) = SettingsLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "SETTINGS", wx, wy);
+
+        int ry = wy + TPad + TH;
+
+        var (sD, sI) = SmBtns(wx, ry);
+        DrawSettingRow(sb, wx, ry, "Mouse Sensitivity",
+            $"{MouseSensitivity * 10000f:F0}", sD, sI, mx, my);
+        ry += RowH;
+
+        var (fD, fI) = SmBtns(wx, ry);
+        DrawSettingRow(sb, wx, ry, "Field of View",
+            $"{Fov:F0}°", fD, fI, mx, my);
+        ry += RowH + 20;
+
+        int bx   = wx + (PW - BW) / 2;
+        var back = new Rectangle(bx, ry, BW, BH);
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
     }
 
-    private void DrawCenteredText(SpriteBatch sb, string text, int panelX, int y, int panelW,
-        float scale, Color color)
+    private void HandleSettings(int mx, int my, int sw, int sh)
     {
-        Vector2 size = _font.MeasureString(text) * scale;
-        sb.DrawString(_font, text,
-            new Vector2(panelX + (panelW - size.X) / 2f, y),
-            color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        var (wx, wy, _) = SettingsLayout(sw, sh);
+        int ry = wy + TPad + TH;
+
+        var (sD, sI) = SmBtns(wx, ry);
+        if (sD.Contains(mx, my)) MouseSensitivity = MathF.Round(Math.Max(0.0001f, MouseSensitivity - 0.0001f), 4);
+        if (sI.Contains(mx, my)) MouseSensitivity = MathF.Round(Math.Min(0.0030f, MouseSensitivity + 0.0001f), 4);
+        ry += RowH;
+
+        var (fD, fI) = SmBtns(wx, ry);
+        if (fD.Contains(mx, my)) Fov = Math.Max(40f, Fov - 5f);
+        if (fI.Contains(mx, my)) Fov = Math.Min(120f, Fov + 5f);
+        ry += RowH + 20;
+
+        int bx = wx + (PW - BW) / 2;
+        if (new Rectangle(bx, ry, BW, BH).Contains(mx, my)) _screen = Screen.Main;
     }
 
-    private void DrawRectOutline(SpriteBatch sb, Rectangle r, Color color, int t)
+    // ════════════════════════════ STATS ═══════════════════════════════════════
+
+    private const int StatCount = 5;
+
+    private (int wx, int wy, int ph) StatsLayout(int sw, int sh)
     {
-        sb.Draw(_pixel, new Rectangle(r.X,         r.Y,          r.Width, t),       color);
-        sb.Draw(_pixel, new Rectangle(r.X,         r.Bottom - t, r.Width, t),       color);
-        sb.Draw(_pixel, new Rectangle(r.X,         r.Y,          t,       r.Height), color);
-        sb.Draw(_pixel, new Rectangle(r.Right - t, r.Y,          t,       r.Height), color);
+        int ph = TPad + TH + StatCount * StH + 22 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+    }
+
+    private void DrawStats(SpriteBatch sb, Player player, int sw, int sh, int mx, int my)
+    {
+        var (wx, wy, ph) = StatsLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "STATISTICS", wx, wy);
+
+        int ry = wy + TPad + TH;
+        var ts = TimeSpan.FromSeconds(_playTimeSec);
+
+        DrawStatRow(sb, wx, ry, "Play Time",
+            $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}");  ry += StH;
+        DrawStatRow(sb, wx, ry, "Blocks Placed",  $"{_blocksPlaced}");    ry += StH;
+        DrawStatRow(sb, wx, ry, "Blocks Broken",  $"{_blocksBroken}");    ry += StH;
+        DrawStatRow(sb, wx, ry, "Position",
+            $"{player.Position.X:F1}  {player.Position.Y:F1}  {player.Position.Z:F1}"); ry += StH;
+        DrawStatRow(sb, wx, ry, "Health",
+            $"{(int)player.Health} / {(int)Player.MaxHealth}");            ry += StH + 22;
+
+        int bx   = wx + (PW - BW) / 2;
+        var back = new Rectangle(bx, ry, BW, BH);
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void HandleStats(int mx, int my, int sw, int sh)
+    {
+        var (wx, wy, _) = StatsLayout(sw, sh);
+        int ry = wy + TPad + TH + StatCount * StH + 22;
+        int bx = wx + (PW - BW) / 2;
+        if (new Rectangle(bx, ry, BW, BH).Contains(mx, my)) _screen = Screen.Main;
+    }
+
+    // ═══════════════════════ Drawing primitives ═══════════════════════════════
+
+    private void DrawPanel(SpriteBatch sb, int x, int y, int w, int h)
+    {
+        sb.Draw(_pixel, new Rectangle(x, y, w, h), ColPanel);
+    }
+
+    private void DrawButton(SpriteBatch sb, Rectangle r, string label, Color bg, Color textCol)
+    {
+        sb.Draw(_pixel, r, bg);
+
+        var sz = _font.MeasureString(label) * FsBtn;
+        var p  = new Vector2(r.X + (r.Width  - sz.X) / 2f,
+                             r.Y + (r.Height - sz.Y) / 2f);
+        sb.DrawString(_font, label, p + new Vector2(1, 1), Color.Black * 0.4f,
+            0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
+        sb.DrawString(_font, label, p, textCol,
+            0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
+    }
+
+    private void DrawTitle(SpriteBatch sb, string title, int wx, int wy)
+    {
+        var sz  = _font.MeasureString(title) * FsTitle;
+        var pos = new Vector2(wx + (PW - sz.X) / 2f, wy + TPad);
+        sb.DrawString(_font, title, pos + new Vector2(2, 2), Color.Black * 0.4f,
+            0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
+        sb.DrawString(_font, title, pos, ColText,
+            0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
+        int sepY = (int)(pos.Y + sz.Y + 8);
+        sb.Draw(_pixel, new Rectangle(wx + 18, sepY, PW - 36, 1), ColSep);
+    }
+
+    private void DrawSettingRow(SpriteBatch sb, int wx, int ry,
+                                string label, string value,
+                                Rectangle dec, Rectangle inc, int mx, int my)
+    {
+        sb.Draw(_pixel, new Rectangle(wx + 16, ry, PW - 32, 1), ColSep * 0.5f);
+
+        var lsz = _font.MeasureString(label) * FsLabel;
+        sb.DrawString(_font, label,
+            new Vector2(wx + 22, ry + (RowH - lsz.Y) / 2f),
+            ColText, 0, Vector2.Zero, FsLabel, SpriteEffects.None, 0);
+
+        var vsz = _font.MeasureString(value) * FsValue;
+        sb.DrawString(_font, value,
+            new Vector2(dec.X - vsz.X - 14, ry + (RowH - vsz.Y) / 2f),
+            ColMuted, 0, Vector2.Zero, FsValue, SpriteEffects.None, 0);
+
+        DrawButton(sb, dec, "−", dec.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+        DrawButton(sb, inc, "+", inc.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void DrawStatRow(SpriteBatch sb, int wx, int ry, string label, string value)
+    {
+        sb.Draw(_pixel, new Rectangle(wx + 16, ry, PW - 32, 1), ColSep * 0.4f);
+
+        sb.DrawString(_font, label,
+            new Vector2(wx + 22, ry + 6),
+            ColMuted, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
+
+        var vsz = _font.MeasureString(value) * FsStat;
+        sb.DrawString(_font, value,
+            new Vector2(wx + PW - 22 - vsz.X, ry + 6),
+            ColText, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
     }
 }
