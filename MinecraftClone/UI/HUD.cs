@@ -32,12 +32,16 @@ public class HUD
     private static readonly int HeartH = (int)(HeartRows * HeartPixelSize);
     private const int TotalHearts      = 10;
 
-    // ── Minecraft-GUI-Farben (exakt wie Java Edition) ────────────────────────
-    private static readonly Color McBg    = new Color(198, 198, 198); // #C6C6C6
-    private static readonly Color McSlotC = new Color(139, 139, 139); // #8B8B8B
-    private static readonly Color McDark  = new Color(55,  55,  55);  // #373737
-    private static readonly Color McLight = Color.White;
-    private static readonly Color McText  = new Color(64,  64,  64);  // dunkler Text auf hellem BG
+    // ── Dark Steel Farbpalette ────────────────────────────────────────────────
+    private static readonly Color DsBg    = new Color( 30,  34,  42); // #1E222A Hintergrund
+    private static readonly Color DsSlot  = new Color( 45,  50,  60); // #2D323C Slot-Fill
+    private static readonly Color DsLight = new Color( 90, 100, 120); // #5A6478 Bevel-Highlight
+    private static readonly Color DsDark  = new Color( 15,  17,  22); // #0F1116 Bevel-Schatten
+    private static readonly Color DsText  = new Color(200, 210, 220); // #C8D2DC Label-Text
+    private static readonly Color DsSep   = new Color( 60,  70,  85); // #3C4655 Trennlinie
+    private static readonly Color DsIcon  = new Color(120, 140, 165); // Rüstungs-Icons
+    private static readonly Color DsSel   = new Color(150, 200, 255); // #96C8FF Auswahl
+    private static readonly Color DsArrow = new Color( 80,  95, 115); // #505F73 Pfeil
 
     public HUD(GraphicsDevice graphicsDevice, SpriteFont font, Texture2D blockAtlas)
     {
@@ -156,106 +160,78 @@ public class HUD
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // MINECRAFT SURVIVAL INVENTAR (1:1, Java 1.21)
-    // Alle Positionen in GUI-Pixeln; Fenster 176×166 (wie inventory.png)
+    // DARK STEEL INVENTAR
+    // Fenster: 352×177 GUI-Pixel
+    // Layout: Rüstung (links) | Mittelgap | 9er-Grid | Gap | Crafting (rechts)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // GUI-Scale wie Minecraft: max(2, min(sw/320, sh/240))
-    private static int Sc(int sw, int sh) => Math.Max(1, Math.Min(sw / 320, sh / 240) - 2);
+    // GUI-Scale: max(1, min(sw/320, sh/240) - 2)
+    private static int Sc(int sw, int sh) => Math.Max(2, Math.Min(sw / 320, sh / 240) - 1);
 
     // GUI-Pixel → Screen-Rectangle (relativ zum Fenster-Ursprung wx/wy)
     private static Rectangle R(int wx, int wy, int gx, int gy, int gw, int gh, int sc) =>
         new Rectangle(wx + gx * sc, wy + gy * sc, gw * sc, gh * sc);
 
-    // ── Erhobenes Panel (wie MC-Inventar-Rahmen) ─────────────────────────────
-    private void McPanel(SpriteBatch sb, int x, int y, int w, int h, int sc)
+    // ── Erhobenes Panel (Dark Steel) ─────────────────────────────────────────
+    private void DsPanel(SpriteBatch sb, int x, int y, int w, int h, int sc)
     {
         int b = 2 * sc;
-        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), McBg);
-        // Links + Rechts (volle Höhe → decken Ecken ab)
-        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), McLight);
-        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), McDark);
-        // Oben + Unten (ohne die Ecken → kein Überschreiben)
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), McLight);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), McDark);
+        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsBg);
+        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), DsLight);
+        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), DsDark);
+        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), DsLight);
+        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), DsDark);
     }
 
-    // ── Vertief ter Slot (wie MC-Container-Slot) ─────────────────────────────
-    private void McSlot(SpriteBatch sb, int x, int y, int w, int h, bool hovered, int sc)
+    // ── Vertiefter Slot (Dark Steel) ─────────────────────────────────────────
+    private void DsSlotDraw(SpriteBatch sb, int x, int y, int w, int h, bool hovered, int sc)
     {
-        int b = sc; // 1 GUI-Pixel Kante
-        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), McSlotC);
-        // Links + Rechts (volle Höhe)
-        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), McDark);
-        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), McLight);
-        // Oben + Unten (ohne Ecken)
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), McDark);
-        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), McLight);
+        int b = sc;
+        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsSlot);
+        sb.Draw(_pixelTexture, new Rectangle(x,       y, b, h), DsDark);
+        sb.Draw(_pixelTexture, new Rectangle(x+w-b,   y, b, h), DsLight);
+        sb.Draw(_pixelTexture, new Rectangle(x+b,     y,     w-2*b, b), DsDark);
+        sb.Draw(_pixelTexture, new Rectangle(x+b,     y+h-b, w-2*b, b), DsLight);
         if (hovered)
-            sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), Color.White * 0.4f);
+            sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), Color.White * 0.25f);
     }
 
-    // ── Slot über GUI-Koordinaten ────────────────────────────────────────────
+    // ── Slot über GUI-Koordinaten ─────────────────────────────────────────────
     private void SlotG(SpriteBatch sb, int wx, int wy, int gx, int gy, int sc, bool hovered) =>
-        McSlot(sb, wx + gx * sc, wy + gy * sc, 18 * sc, 18 * sc, hovered, sc);
+        DsSlotDraw(sb, wx + gx * sc, wy + gy * sc, 18 * sc, 18 * sc, hovered, sc);
 
-    // ── Label mit Schatten (wie MC-Inventar-Beschriftung) ────────────────────
-    private void McLabel(SpriteBatch sb, string text, int wx, int wy, int gx, int gy, int sc)
+    // ── Label mit Schatten (Dark Steel) ──────────────────────────────────────
+    private void DsLabel(SpriteBatch sb, string text, int wx, int wy, int gx, int gy, int sc)
     {
         float s = sc * 0.42f;
         var pos = new Vector2(wx + gx * sc, wy + gy * sc);
         sb.DrawString(_font, text, pos + new Vector2(sc * 0.5f, sc * 0.5f),
-            McDark * 0.5f, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
-        sb.DrawString(_font, text, pos, McText, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
+            DsDark, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
+        sb.DrawString(_font, text, pos, DsText, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
     }
 
-    // ── Haupt-DrawInventory ──────────────────────────────────────────────────
+    // ── Haupt-DrawInventory ───────────────────────────────────────────────────
+    // Layout (286 × 94 GUI-Pixel):
+    //   Armor  gx=6        | Inventar gx=28+col*19  | Crafting gx=202/221
+    //   gy=8,27,46,65      | gy=8/27/46 (3 Reihen)  | gy=27/46 (Reihen 2+3)
+    //   Separator gy=67 | Hotbar gy=69
     private void DrawInventory(SpriteBatch sb, Inventory inv, int sw, int sh, int mx, int my)
     {
         int sc = Sc(sw, sh);
-        const int GuiW = 176, GuiH = 166;
+        const int GuiW = 286, GuiH = 94;
         int winW = GuiW * sc, winH = GuiH * sc;
         int wx = (sw - winW) / 2, wy = (sh - winH) / 2;
 
-        // Dunkles Overlay
-        sb.Draw(_pixelTexture, new Rectangle(0, 0, sw, sh), Color.Black * 0.4f);
+        // Hintergrund (kein Overlay, kein Rand)
+        sb.Draw(_pixelTexture, new Rectangle(wx, wy, winW, winH), DsBg);
 
-        // Inventar-Panel
-        McPanel(sb, wx, wy, winW, winH, sc);
-
-        // ── Rüstungs-Slots (36–39), links, nur visuell ───────────────────────
-        int[] armorGy = { 8, 26, 44, 62 };
+        // ── Rüstungs-Slots (36–39), direkt links vom Grid ────────────────────
+        int[] armorGy = { 8, 27, 46, 65 };
         for (int i = 0; i < 4; i++)
         {
-            bool hov = R(wx, wy, 8, armorGy[i], 18, 18, sc).Contains(mx, my);
-            SlotG(sb, wx, wy, 8, armorGy[i], sc, hov);
-            DrawArmorIcon(sb, wx, wy, 8, armorGy[i], sc, i);
-        }
-
-        // ── Spieler-Silhouette ────────────────────────────────────────────────
-        DrawPlayerSilhouette(sb, wx, wy, sc);
-
-        // ── Off-Hand-Slot (x=77, y=62) ───────────────────────────────────────
-        {
-            bool hov = R(wx, wy, 77, 62, 18, 18, sc).Contains(mx, my);
-            SlotG(sb, wx, wy, 77, 62, sc, hov);
-        }
-
-        // ── Crafting-Label + 2×2 Grid (visuell) ─────────────────────────────
-        McLabel(sb, "Crafting", wx, wy, 97, 8, sc);
-        int[] cGx = { 98, 116,  98, 116 };
-        int[] cGy = { 18,  18,  36,  36 };
-        for (int i = 0; i < 4; i++)
-        {
-            bool hov = R(wx, wy, cGx[i], cGy[i], 18, 18, sc).Contains(mx, my);
-            SlotG(sb, wx, wy, cGx[i], cGy[i], sc, hov);
-        }
-        DrawCraftArrow(sb, wx, wy, sc);
-
-        // Ergebnis-Slot
-        {
-            bool hov = R(wx, wy, 154, 28, 18, 18, sc).Contains(mx, my);
-            SlotG(sb, wx, wy, 154, 28, sc, hov);
+            bool hov = R(wx, wy, 6, armorGy[i], 18, 18, sc).Contains(mx, my);
+            SlotG(sb, wx, wy, 6, armorGy[i], sc, hov);
+            DrawArmorIcon(sb, wx, wy, 6, armorGy[i], sc, i);
         }
 
         // ── Haupt-Inventar (Slots 9–35, 3 Reihen × 9 Spalten) ───────────────
@@ -263,28 +239,46 @@ public class HUD
         for (int col = 0; col < 9; col++)
         {
             int idx = 9 + row * 9 + col;
-            int gx  = 7 + col * 18, gy = 83 + row * 18;
+            int gx  = 28 + col * 19, gy = 8 + row * 19;
             bool hov = R(wx, wy, gx, gy, 18, 18, sc).Contains(mx, my);
             SlotG(sb, wx, wy, gx, gy, sc, hov);
             var item = inv.GetSlot(idx);
             if (!item.IsEmpty) DrawIconMc(sb, item, R(wx, wy, gx, gy, 18, 18, sc), sc);
         }
 
-        // ── Hotbar-Zeile (Slots 0–8, y=141) ─────────────────────────────────
+        // ── Trennlinie ────────────────────────────────────────────────────────
+        sb.Draw(_pixelTexture, R(wx, wy, 28, 67, 170, 1, sc), DsSep);
+
+        // ── Hotbar-Zeile (Slots 0–8, gy=69) ──────────────────────────────────
         for (int col = 0; col < 9; col++)
         {
-            int gx = 7 + col * 18;
-            bool hov = R(wx, wy, gx, 141, 18, 18, sc).Contains(mx, my);
-            SlotG(sb, wx, wy, gx, 141, sc, hov);
+            int gx = 28 + col * 19;
+            bool hov = R(wx, wy, gx, 69, 18, 18, sc).Contains(mx, my);
+            SlotG(sb, wx, wy, gx, 69, sc, hov);
             if (col == inv.SelectedSlot)
-                DrawOutline(sb, R(wx, wy, gx, 141, 18, 18, sc), Color.White, sc);
+                DrawOutline(sb, R(wx, wy, gx, 69, 18, 18, sc), DsSel, sc);
             var item = inv.GetSlot(col);
-            if (!item.IsEmpty) DrawIconMc(sb, item, R(wx, wy, gx, 141, 18, 18, sc), sc);
+            if (!item.IsEmpty) DrawIconMc(sb, item, R(wx, wy, gx, 69, 18, 18, sc), sc);
         }
 
-        // ── Trennstrich zwischen 3×9-Grid und Hotbar ─────────────────────────
-        int sepY = wy + 138 * sc;
-        sb.Draw(_pixelTexture, new Rectangle(wx + 7 * sc, sepY, 162 * sc, sc), McDark * 0.5f);
+        // ── Crafting-Label + 2×2 Grid (direkt rechts, Reihen 2+3) ───────────
+        DsLabel(sb, "Crafting", wx, wy, 202, 8, sc);
+        int[] cGx = { 202, 221, 202, 221 };
+        int[] cGy = {  27,  27,  46,  46 };
+        for (int i = 0; i < 4; i++)
+        {
+            bool hov = R(wx, wy, cGx[i], cGy[i], 18, 18, sc).Contains(mx, my);
+            SlotG(sb, wx, wy, cGx[i], cGy[i], sc, hov);
+        }
+
+        // Crafting-Pfeil
+        DrawCraftArrow(sb, wx, wy, sc);
+
+        // Ergebnis-Slot (vertikal zentriert mit 2×2-Grid)
+        {
+            bool hov = R(wx, wy, 262, 36, 18, 18, sc).Contains(mx, my);
+            SlotG(sb, wx, wy, 262, 36, sc, hov);
+        }
 
         // ── Cursor-Stack ──────────────────────────────────────────────────────
         var cursor = inv.CursorStack;
@@ -299,91 +293,69 @@ public class HUD
     public int GetInventorySlotAt(int mx, int my, int sw, int sh)
     {
         int sc = Sc(sw, sh);
-        int wx = (sw - 176 * sc) / 2;
-        int wy = (sh - 166 * sc) / 2;
+        int wx = (sw - 286 * sc) / 2;
+        int wy = (sh -  94 * sc) / 2;
 
         for (int row = 0; row < 3; row++)
         for (int col = 0; col < 9; col++)
-            if (R(wx, wy, 7 + col * 18, 83 + row * 18, 18, 18, sc).Contains(mx, my))
+            if (R(wx, wy, 28 + col * 19, 8 + row * 19, 18, 18, sc).Contains(mx, my))
                 return 9 + row * 9 + col;
 
         for (int col = 0; col < 9; col++)
-            if (R(wx, wy, 7 + col * 18, 141, 18, 18, sc).Contains(mx, my))
+            if (R(wx, wy, 28 + col * 19, 69, 18, 18, sc).Contains(mx, my))
                 return col;
 
         return -1;
     }
 
-    // ── Rüstungs-Slot-Symbole (Silhouetten) ──────────────────────────────────
-    private static readonly string[] ArmorLabels = { "H", "C", "L", "B" };
+    // ── Rüstungs-Slot-Icons (10×10 GUI-Pixel, Pixel-Art) ─────────────────────
     private void DrawArmorIcon(SpriteBatch sb, int wx, int wy, int gx, int gy, int sc, int idx)
     {
-        // Kleines graues Symbol zentriert im Slot
-        Color col = new Color(130, 130, 130) * 0.6f;
-        // Vereinfachte Rüstungs-Icons (5×5 GUI-Pixel, zentriert in 18×18)
-        int ox = wx + (gx + 6) * sc;
-        int oy = wy + (gy + 6) * sc;
-        int ps = sc; // 1 GUI-Pixel
+        int ps = sc;
+        int ox = wx + (gx + 4) * sc;
+        int oy = wy + (gy + 4) * sc;
+        Color ic = DsIcon;
+
         switch (idx)
         {
-            case 0: // Helm: Bogen + Krempe
-                sb.Draw(_pixelTexture, new Rectangle(ox + ps, oy,        4*ps, ps),    col);
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy + ps,   6*ps, 3*ps), col);
+            case 0: // Helm: Kuppel mit Krempe
+                sb.Draw(_pixelTexture, new Rectangle(ox + 2*ps, oy,        6*ps,  ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox +   ps, oy +   ps, 8*ps, 2*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox +   ps, oy + 3*ps, 2*ps,   ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox + 7*ps, oy + 3*ps, 2*ps,   ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy + 4*ps,10*ps,   ps), ic);
                 break;
-            case 1: // Brust: Trapez
-                sb.Draw(_pixelTexture, new Rectangle(ox + ps, oy,        4*ps, ps),    col);
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy + ps,   6*ps, 4*ps), col);
+
+            case 1: // Brustplatte: Schultern + Torso
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy,        3*ps,   ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox + 7*ps, oy,        3*ps,   ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy +   ps,10*ps, 5*ps), ic);
                 break;
-            case 2: // Beine: zwei Säulen
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy,        6*ps, 2*ps), col);
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy + 2*ps, 2*ps, 3*ps), col);
-                sb.Draw(_pixelTexture, new Rectangle(ox + 4*ps,oy + 2*ps, 2*ps, 3*ps), col);
+
+            case 2: // Beinling: Hüftband + zwei Beine
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy,       10*ps, 2*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy + 2*ps, 4*ps, 7*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox + 6*ps, oy + 2*ps, 4*ps, 7*ps), ic);
                 break;
-            case 3: // Stiefel: zwei Blöcke
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy,        2*ps, 4*ps), col);
-                sb.Draw(_pixelTexture, new Rectangle(ox + 4*ps,oy,        2*ps, 4*ps), col);
-                sb.Draw(_pixelTexture, new Rectangle(ox,       oy + 4*ps, 3*ps, ps),  col);
-                sb.Draw(_pixelTexture, new Rectangle(ox + 3*ps,oy + 4*ps, 3*ps, ps),  col);
+
+            case 3: // Schuhe: zwei Schäfte + Sohlen
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy,        4*ps, 6*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox + 6*ps, oy,        4*ps, 6*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox,        oy + 6*ps, 5*ps, 2*ps), ic);
+                sb.Draw(_pixelTexture, new Rectangle(ox + 5*ps, oy + 6*ps, 5*ps, 2*ps), ic);
                 break;
         }
     }
 
-    // ── Spieler-Silhouette ────────────────────────────────────────────────────
-    private void DrawPlayerSilhouette(SpriteBatch sb, int wx, int wy, int sc)
-    {
-        // Spieler-Bereich: x=51, y=8 → 36×58 GUI-Pixel
-        Color bg  = new Color(60, 60, 60) * 0.25f;
-        Color sil = new Color(80, 80, 80);
-
-        // Hintergrund-Box: zwischen Rüstung (endet x=26) und Crafting (beginnt x=98)
-        sb.Draw(_pixelTexture, R(wx, wy, 26, 8, 72, 66, sc), bg);
-
-        // Figur zentriert in der 72-breiten Box (Zentrum x=62)
-        // Kopf (8×8)
-        sb.Draw(_pixelTexture, R(wx, wy, 58, 12, 8, 8,  sc), sil);
-        // Körper (8×12)
-        sb.Draw(_pixelTexture, R(wx, wy, 58, 21, 8, 12, sc), sil);
-        // Linker Arm (4×12)
-        sb.Draw(_pixelTexture, R(wx, wy, 54, 21, 4, 12, sc), sil * 0.85f);
-        // Rechter Arm (4×12)
-        sb.Draw(_pixelTexture, R(wx, wy, 66, 21, 4, 12, sc), sil * 0.85f);
-        // Linkes Bein (4×18)
-        sb.Draw(_pixelTexture, R(wx, wy, 58, 34, 4, 18, sc), sil);
-        // Rechtes Bein (4×18)
-        sb.Draw(_pixelTexture, R(wx, wy, 62, 34, 4, 18, sc), sil);
-    }
-
-    // ── Crafting-Pfeil (→) ────────────────────────────────────────────────────
+    // ── Crafting-Pfeil (→), zentriert auf Crafting-Grid-Mitte y=45 ───────────
     private void DrawCraftArrow(SpriteBatch sb, int wx, int wy, int sc)
     {
-        Color c = new Color(100, 100, 100);
-        // Körper: 14×3 horizontal bei y=31
-        sb.Draw(_pixelTexture, R(wx, wy, 133, 31, 14, 3, sc), c);
-        // Pfeilspitze: 4 abnehmende Schichten → echtes Dreieck
-        sb.Draw(_pixelTexture, R(wx, wy, 147, 28, 2, 9, sc), c);
-        sb.Draw(_pixelTexture, R(wx, wy, 149, 29, 2, 7, sc), c);
-        sb.Draw(_pixelTexture, R(wx, wy, 151, 30, 2, 5, sc), c);
-        sb.Draw(_pixelTexture, R(wx, wy, 153, 31, 1, 3, sc), c);
+        // Körper
+        sb.Draw(_pixelTexture, R(wx, wy, 242, 44, 13, 3, sc), DsArrow);
+        // Pfeilspitze (3 Schichten)
+        sb.Draw(_pixelTexture, R(wx, wy, 255, 43,  2, 5, sc), DsArrow);
+        sb.Draw(_pixelTexture, R(wx, wy, 257, 44,  2, 3, sc), DsArrow);
+        sb.Draw(_pixelTexture, R(wx, wy, 259, 45,  1, 1, sc), DsArrow);
     }
 
     // ── Item-Icon (MC-Maßstab, 16×16 GUI-Pixel in 18×18 Slot) ───────────────
@@ -392,7 +364,7 @@ public class HUD
     {
         if (item.IsEmpty) return;
 
-        int pad  = sc; // 1 GUI-Pixel Rand
+        int pad  = sc;
         var dest = new Rectangle(slotRect.X + pad, slotRect.Y + pad,
                                  slotRect.Width - 2 * pad, slotRect.Height - 2 * pad);
 
@@ -406,12 +378,10 @@ public class HUD
             string s     = item.Count.ToString();
             float  fsc   = sc * 0.38f;
             Vector2 size = _font.MeasureString(s) * fsc;
-            // Schatten
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - sc + sc * 0.5f,
                             slotRect.Bottom - size.Y - sc + sc * 0.5f),
-                McDark * 0.7f, 0f, Vector2.Zero, fsc, SpriteEffects.None, 0f);
-            // Text
+                DsDark * 0.7f, 0f, Vector2.Zero, fsc, SpriteEffects.None, 0f);
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - sc, slotRect.Bottom - size.Y - sc),
                 Color.White, 0f, Vector2.Zero, fsc, SpriteEffects.None, 0f);

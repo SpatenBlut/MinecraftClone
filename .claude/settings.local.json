@@ -9,7 +9,18 @@
       "Bash(taskkill:*)",
       "Bash(cmd:*)",
       "Bash(dotnet run *)",
-      "Bash(del \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\bin\\\\Debug\\\\net8.0\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\")"
+      "Bash(del \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\bin\\\\Debug\\\\net8.0\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\" \"C:\\\\Users\\\\1234\\\\RiderProjects\\\\MinecraftClone\\\\Content\\\\Worlds\\\\world1.dat\")",
+      "Bash(dotnet *)",
+      "Bash(wine --version)",
+      "Bash(winetricks --version)",
+      "Read(//home/nicola/**)",
+      "Read(//home/nicola/.nuget/**)",
+      "Bash(xargs -I{} sh -c 'strings {} 2>/dev/null | grep -l \"MGFXC_WINE\" 2>/dev/null || true')",
+      "Bash(wget -q \"https://download.visualstudio.microsoft.com/download/pr/93561b7a-3e54-4a7b-89c5-b5b4d0e1c3b3/8e3de4f45b1ba8f5b9afdd7acd9e3b7a/dotnet-runtime-8.0.14-win-x64.exe\" -O /tmp/dotnet-win.exe)",
+      "Bash(echo \"Exit: $?\")",
+      "Read(//tmp/**)",
+      "Bash(wget -q \"https://aka.ms/dotnet/8.0/dotnet-runtime-win-x64.zip\" -O /tmp/dotnet-win-x64.zip)",
+      "Bash(jobs -l)"
     ]
   }
 }
