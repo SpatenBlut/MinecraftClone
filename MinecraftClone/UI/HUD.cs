@@ -8,10 +8,11 @@ namespace MinecraftClone.UI;
 
 public class HUD
 {
-    private SpriteFont    _font;
-    private Texture2D     _pixelTexture;
-    private Texture2D     _blockAtlas;
-    private GraphicsDevice _graphicsDevice;
+    private SpriteFont         _font;
+    private Texture2D          _pixelTexture;
+    private Texture2D          _blockAtlas;
+    private GraphicsDevice     _graphicsDevice;
+    private BlockIconRenderer  _iconRenderer;
 
     private float _smoothFps = 0f;
 
@@ -50,6 +51,10 @@ public class HUD
         _blockAtlas     = blockAtlas;
         _pixelTexture   = new Texture2D(graphicsDevice, 1, 1);
         _pixelTexture.SetData(new[] { Color.White });
+
+        // 3D-Block-Icons vorrendern (einmal beim Start)
+        _iconRenderer = new BlockIconRenderer(graphicsDevice, blockAtlas);
+        _iconRenderer.Initialize();
     }
 
     // ─── Haupt-Draw ──────────────────────────────────────────────────────────
@@ -358,20 +363,17 @@ public class HUD
         sb.Draw(_pixelTexture, R(wx, wy, 259, 45,  1, 1, sc), DsArrow);
     }
 
-    // ── Item-Icon (MC-Maßstab, 16×16 GUI-Pixel in 18×18 Slot) ───────────────
+    // ── Item-Icon (3D-vorgerendert, in 18×18 Slot) ───────────────────────────
     private void DrawIconMc(SpriteBatch sb, ItemStack item, Rectangle slotRect, int sc,
         bool drawCount = true)
     {
         if (item.IsEmpty) return;
 
-        int pad  = sc;
+        int pad  = sc * 2;
         var dest = new Rectangle(slotRect.X + pad, slotRect.Y + pad,
                                  slotRect.Width - 2 * pad, slotRect.Height - 2 * pad);
 
-        int ts = _blockAtlas.Width / 16;
-        (int col, int row) = GetIconTile(item.Block);
-        var src = new Rectangle(col * ts, row * ts, ts, ts);
-        sb.Draw(_blockAtlas, dest, src, GetTint(item.Block));
+        sb.Draw(_iconRenderer.GetIcon(item.Block), dest, Color.White);
 
         if (drawCount && item.Count > 1)
         {
@@ -388,17 +390,16 @@ public class HUD
         }
     }
 
-    // ── Item-Icon für Hotbar (größere Slots) ─────────────────────────────────
+    // ── Item-Icon für Hotbar (größere Slots, 3D) ──────────────────────────────
     private void DrawIcon(SpriteBatch sb, ItemStack item, Rectangle slotRect, bool drawCount = true)
     {
         if (item.IsEmpty) return;
+
         int pad = slotRect.Width / 8;
-        int ts  = _blockAtlas.Width / 16;
-        (int col, int row) = GetIconTile(item.Block);
-        sb.Draw(_blockAtlas,
+        sb.Draw(_iconRenderer.GetIcon(item.Block),
             new Rectangle(slotRect.X + pad, slotRect.Y + pad,
                           slotRect.Width - pad * 2, slotRect.Height - pad * 2),
-            new Rectangle(col * ts, row * ts, ts, ts), GetTint(item.Block));
+            Color.White);
 
         if (drawCount && item.Count > 1)
         {
@@ -410,25 +411,6 @@ public class HUD
                 Color.White, 0f, Vector2.Zero, fsc, SpriteEffects.None, 0f);
         }
     }
-
-    private static (int col, int row) GetIconTile(BlockType block) => block switch
-    {
-        BlockType.Grass  => (0, 0),
-        BlockType.Dirt   => (2, 0),
-        BlockType.Stone  => (3, 0),
-        BlockType.Wood   => (5, 0),
-        BlockType.Leaves => (6, 0),
-        BlockType.Sand   => (7, 0),
-        BlockType.Water  => (8, 0),
-        _                => (0, 0)
-    };
-
-    private static Color GetTint(BlockType block) => block switch
-    {
-        BlockType.Grass  => new Color(0x91, 0xBD, 0x59),
-        BlockType.Leaves => new Color(0x77, 0xAB, 0x2F),
-        _                => Color.White
-    };
 
     // ─── Hilfsmethoden ───────────────────────────────────────────────────────
 
