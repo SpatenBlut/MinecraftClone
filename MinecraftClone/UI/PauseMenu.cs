@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -14,6 +15,9 @@ public class PauseMenu
     private readonly SpriteFont     _font;
     private readonly Texture2D      _pixel;
     private readonly GraphicsDevice _gd;
+
+    private readonly Dictionary<int, Texture2D> _fillCornerCache    = new();
+    private readonly Dictionary<int, Texture2D> _outlineCornerCache = new();
 
     // ── Dark‑Steel palette ────────────────────────────────────────────────────
     private static readonly Color ColOverlay = new Color(0,   0,   0,   185);
@@ -271,14 +275,91 @@ public class PauseMenu
 
     // ═══════════════════════ Drawing primitives ═══════════════════════════════
 
+    private Texture2D GetFillCorner(int r)
+    {
+        if (_fillCornerCache.TryGetValue(r, out var t)) return t;
+        var tex = new Texture2D(_gd, r, r);
+        var px  = new Color[r * r];
+        for (int py = 0; py < r; py++)
+        for (int px2 = 0; px2 < r; px2++)
+        {
+            float dx = r - (px2 + 0.5f), dy = r - (py + 0.5f);
+            float a  = MathHelper.Clamp(r + 0.5f - MathF.Sqrt(dx * dx + dy * dy), 0f, 1f);
+            px[py * r + px2] = new Color((byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f));
+        }
+        tex.SetData(px);
+        return _fillCornerCache[r] = tex;
+    }
+
+    private Texture2D GetOutlineCorner(int r)
+    {
+        if (_outlineCornerCache.TryGetValue(r, out var t)) return t;
+        var tex  = new Texture2D(_gd, r, r);
+        var px   = new Color[r * r];
+        float edge = r - 0.5f;
+        for (int py = 0; py < r; py++)
+        for (int px2 = 0; px2 < r; px2++)
+        {
+            float dx   = r - (px2 + 0.5f), dy = r - (py + 0.5f);
+            float dist = MathF.Sqrt(dx * dx + dy * dy);
+            float a    = MathHelper.Clamp(1.0f - MathF.Abs(dist - edge), 0f, 1f);
+            px[py * r + px2] = new Color((byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f));
+        }
+        tex.SetData(px);
+        return _outlineCornerCache[r] = tex;
+    }
+
+    private void FillRounded(SpriteBatch sb, int x, int y, int w, int h, Color c, int r)
+    {
+        r = Math.Min(r, Math.Min(w, h) / 2);
+        sb.Draw(_pixel, new Rectangle(x + r, y,         w - 2 * r, h),     c);
+        if (r > 0 && h > 2 * r)
+        {
+            sb.Draw(_pixel, new Rectangle(x,         y + r, r, h - 2 * r), c);
+            sb.Draw(_pixel, new Rectangle(x + w - r, y + r, r, h - 2 * r), c);
+        }
+        if (r > 0)
+        {
+            var ct = GetFillCorner(r);
+            sb.Draw(ct, new Rectangle(x,         y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.None,                                          0);
+            sb.Draw(ct, new Rectangle(x + w - r, y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally,                              0);
+            sb.Draw(ct, new Rectangle(x,         y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipVertically,                                0);
+            sb.Draw(ct, new Rectangle(x + w - r, y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically, 0);
+        }
+    }
+
+    private void OutlineRounded(SpriteBatch sb, int x, int y, int w, int h, Color c, int r)
+    {
+        r = Math.Min(r, Math.Min(w, h) / 2);
+        if (w > 2 * r)
+        {
+            sb.Draw(_pixel, new Rectangle(x + r, y,         w - 2 * r, 1), c);
+            sb.Draw(_pixel, new Rectangle(x + r, y + h - 1, w - 2 * r, 1), c);
+        }
+        if (h > 2 * r)
+        {
+            sb.Draw(_pixel, new Rectangle(x,         y + r, 1, h - 2 * r), c);
+            sb.Draw(_pixel, new Rectangle(x + w - 1, y + r, 1, h - 2 * r), c);
+        }
+        if (r > 0)
+        {
+            var ct = GetOutlineCorner(r);
+            sb.Draw(ct, new Rectangle(x,         y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.None,                                          0);
+            sb.Draw(ct, new Rectangle(x + w - r, y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally,                              0);
+            sb.Draw(ct, new Rectangle(x,         y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipVertically,                                0);
+            sb.Draw(ct, new Rectangle(x + w - r, y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically, 0);
+        }
+    }
+
     private void DrawPanel(SpriteBatch sb, int x, int y, int w, int h)
     {
-        sb.Draw(_pixel, new Rectangle(x, y, w, h), ColPanel);
+        FillRounded(sb, x, y, w, h, ColPanel, 8);
+        OutlineRounded(sb, x, y, w, h, Color.White * 0.12f, 8);
     }
 
     private void DrawButton(SpriteBatch sb, Rectangle r, string label, Color bg, Color textCol)
     {
-        sb.Draw(_pixel, r, bg);
+        FillRounded(sb, r.X, r.Y, r.Width, r.Height, bg, 6);
 
         var sz = _font.MeasureString(label) * FsBtn;
         var p  = new Vector2(r.X + (r.Width  - sz.X) / 2f,

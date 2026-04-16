@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MinecraftClone.Gameplay;
@@ -107,8 +108,8 @@ public class HUD
         {
             int x = startX + (slotSize + spacing) * i;
             Color c = i == inventory.SelectedSlot ? Color.White : Color.Gray;
-            sb.Draw(_pixelTexture, new Rectangle(x, hotbarY, slotSize, slotSize), c * 0.45f);
-            DrawOutline(sb, new Rectangle(x, hotbarY, slotSize, slotSize), c, 2);
+            FillRounded(sb, x, hotbarY, slotSize, slotSize, c * 0.45f, 6);
+            OutlineRounded(sb, x, hotbarY, slotSize, slotSize, c, 6);
             var item = inventory.GetSlot(i);
             if (!item.IsEmpty)
                 DrawIcon(sb, item, new Rectangle(x, hotbarY, slotSize, slotSize));
@@ -180,17 +181,17 @@ public class HUD
     // ── Erhobenes Panel (Dark Steel) ─────────────────────────────────────────
     private void DsPanel(SpriteBatch sb, int x, int y, int w, int h, int sc)
     {
-        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsBg);
-        DrawOutline(sb, new Rectangle(x, y, w, h), Color.White * 0.15f, 1);
+        FillRounded(sb, x, y, w, h, DsBg, 8);
+        OutlineRounded(sb, x, y, w, h, Color.White * 0.15f, 8);
     }
 
     // ── Slot ─────────────────────────────────────────────────────────────────
     private void DsSlotDraw(SpriteBatch sb, int x, int y, int w, int h, bool hovered, int sc)
     {
-        sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), DsSlot);
-        DrawOutline(sb, new Rectangle(x, y, w, h), Color.White * 0.15f, 1);
+        FillRounded(sb, x, y, w, h, DsSlot, 4);
+        OutlineRounded(sb, x, y, w, h, Color.White * 0.15f, 4);
         if (hovered)
-            sb.Draw(_pixelTexture, new Rectangle(x, y, w, h), Color.White * 0.25f);
+            FillRounded(sb, x, y, w, h, Color.White * 0.25f, 4);
     }
 
     // ── Slot über GUI-Koordinaten ─────────────────────────────────────────────
@@ -219,8 +220,9 @@ public class HUD
         int winW = GuiW * sc, winH = GuiH * sc;
         int wx = (sw - winW) / 2, wy = (sh - winH) / 2;
 
-        // Hintergrund (kein Overlay, kein Rand)
-        sb.Draw(_pixelTexture, new Rectangle(wx, wy, winW, winH), DsBg);
+        // Hintergrund
+        FillRounded(sb, wx, wy, winW, winH, DsBg, 8);
+        OutlineRounded(sb, wx, wy, winW, winH, Color.White * 0.15f, 8);
 
         // ── Rüstungs-Slots (36–39), direkt links vom Grid ────────────────────
         int[] armorGy = { 8, 27, 46, 65 };
@@ -410,5 +412,89 @@ public class HUD
         sb.Draw(_pixelTexture, new Rectangle(rect.X, rect.Bottom - thickness, rect.Width, thickness), color);
         sb.Draw(_pixelTexture, new Rectangle(rect.X, rect.Y, thickness, rect.Height), color);
         sb.Draw(_pixelTexture, new Rectangle(rect.Right - thickness, rect.Y, thickness, rect.Height), color);
+    }
+
+    // ── Ecken-Textur-Cache (anti-aliased, einmal gebaked) ────────────────────
+    private readonly Dictionary<int, Texture2D> _fillCornerCache    = new();
+    private readonly Dictionary<int, Texture2D> _outlineCornerCache = new();
+
+    private Texture2D GetFillCorner(int r)
+    {
+        if (_fillCornerCache.TryGetValue(r, out var t)) return t;
+        var tex = new Texture2D(_graphicsDevice, r, r);
+        var px  = new Color[r * r];
+        for (int py = 0; py < r; py++)
+        for (int px2 = 0; px2 < r; px2++)
+        {
+            float dx = r - (px2 + 0.5f), dy = r - (py + 0.5f);
+            float a  = MathHelper.Clamp(r + 0.5f - MathF.Sqrt(dx * dx + dy * dy), 0f, 1f);
+            px[py * r + px2] = new Color((byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f));
+        }
+        tex.SetData(px);
+        return _fillCornerCache[r] = tex;
+    }
+
+    private Texture2D GetOutlineCorner(int r)
+    {
+        if (_outlineCornerCache.TryGetValue(r, out var t)) return t;
+        var tex  = new Texture2D(_graphicsDevice, r, r);
+        var px   = new Color[r * r];
+        float edge = r - 0.5f;
+        for (int py = 0; py < r; py++)
+        for (int px2 = 0; px2 < r; px2++)
+        {
+            float dx   = r - (px2 + 0.5f), dy = r - (py + 0.5f);
+            float dist = MathF.Sqrt(dx * dx + dy * dy);
+            float a    = MathHelper.Clamp(1.0f - MathF.Abs(dist - edge), 0f, 1f);
+            px[py * r + px2] = new Color((byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f), (byte)(a * 255f));
+        }
+        tex.SetData(px);
+        return _outlineCornerCache[r] = tex;
+    }
+
+    private void FillRounded(SpriteBatch sb, int x, int y, int w, int h, Color c, int r)
+    {
+        r = Math.Min(r, Math.Min(w, h) / 2);
+        // Mittelteil (3 Rechtecke, keine Überlappung mit Ecken)
+        sb.Draw(_pixelTexture, new Rectangle(x + r, y,         w - 2 * r, h),     c);
+        if (r > 0 && h > 2 * r)
+        {
+            sb.Draw(_pixelTexture, new Rectangle(x,         y + r, r, h - 2 * r), c);
+            sb.Draw(_pixelTexture, new Rectangle(x + w - r, y + r, r, h - 2 * r), c);
+        }
+        // 4 anti-aliased Ecken
+        if (r > 0)
+        {
+            var ct = GetFillCorner(r);
+            sb.Draw(ct, new Rectangle(x,         y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.None,                                          0);
+            sb.Draw(ct, new Rectangle(x + w - r, y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally,                              0);
+            sb.Draw(ct, new Rectangle(x,         y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipVertically,                                0);
+            sb.Draw(ct, new Rectangle(x + w - r, y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically, 0);
+        }
+    }
+
+    private void OutlineRounded(SpriteBatch sb, int x, int y, int w, int h, Color c, int r)
+    {
+        r = Math.Min(r, Math.Min(w, h) / 2);
+        // Gerade Kanten
+        if (w > 2 * r)
+        {
+            sb.Draw(_pixelTexture, new Rectangle(x + r, y,         w - 2 * r, 1), c);
+            sb.Draw(_pixelTexture, new Rectangle(x + r, y + h - 1, w - 2 * r, 1), c);
+        }
+        if (h > 2 * r)
+        {
+            sb.Draw(_pixelTexture, new Rectangle(x,         y + r, 1, h - 2 * r), c);
+            sb.Draw(_pixelTexture, new Rectangle(x + w - 1, y + r, 1, h - 2 * r), c);
+        }
+        // Anti-aliased Kreisbogen-Ecken
+        if (r > 0)
+        {
+            var ct = GetOutlineCorner(r);
+            sb.Draw(ct, new Rectangle(x,         y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.None,                                          0);
+            sb.Draw(ct, new Rectangle(x + w - r, y,         r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally,                              0);
+            sb.Draw(ct, new Rectangle(x,         y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipVertically,                                0);
+            sb.Draw(ct, new Rectangle(x + w - r, y + h - r, r, r), null, c, 0, Vector2.Zero, SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically, 0);
+        }
     }
 }
