@@ -1,8 +1,24 @@
+# Build
 bin/
 obj/
-/packages/
-riderModule.iml
-/_ReSharper.Caches/
 
-# Welt-Dateien ignorieren
+# NuGet
+packages/
+*.nupkg
+
+# Rider / IDE
+.idea/
+*.sln.iml
+*.user
+*.DotSettings.user
+_ReSharper.Caches/
+
+# Logs / Temp
+*.log
+
+# Game Data (Welt)
 Content/Worlds/
+*.dat
+
+# MonoGame / Content Pipeline
+*.mgstats
