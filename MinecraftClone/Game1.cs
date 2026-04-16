@@ -103,6 +103,9 @@ public class Game1 : Game
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
 
         _chunkMesh.Build(_world);
+
+        _player.Camera.MouseSensitivity = _pauseMenu.MouseSensitivity;
+        _player.Camera.BaseFov          = _pauseMenu.Fov;
     }
 
     protected override void Update(GameTime gameTime)

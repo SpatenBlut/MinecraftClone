@@ -18,16 +18,17 @@ public class Camera
     private float _yaw;
     private float _pitch;
 
-    public float MouseSensitivity { get; set; } = 0.0006f;
-    public float BaseFov          { get; set; } = 75f;
+    public float MouseSensitivity { get; set; } = 0.002618f; // Minecraft 100% default
+    public float BaseFov          { get; set; } = 70f;
 
     private const float SprintFovBonus = 10f;
     private const float FovSpeed       = 8f;
 
-    private float _currentFov = 75f;
+    private float _currentFov = 70f;
     public bool IsSprinting { private get; set; }
 
     private bool _firstMouseMove = true;
+    private int  _anchorX, _anchorY;
 
     public Camera(Vector3 position, float aspectRatio)
     {
@@ -74,22 +75,25 @@ public class Camera
         {
             Mouse.SetPosition(screenCenterX, screenCenterY);
             _firstMouseMove = false;
+            var after = Mouse.GetState();
+            _anchorX = after.X;
+            _anchorY = after.Y;
             UpdateVectors();
             UpdateViewMatrix();
             return;
         }
 
-        // Delta is always relative to screen center — no _lastMouse tracking needed.
-        // This avoids the warp race condition where SetPosition isn't applied yet
-        // before the next GetState(), which caused inconsistent slow vs. fast movement.
-        float deltaX = mouseState.X - screenCenterX;
-        float deltaY = mouseState.Y - screenCenterY;
+        float deltaX = mouseState.X - _anchorX;
+        float deltaY = mouseState.Y - _anchorY;
 
         _yaw += deltaX * MouseSensitivity;
         _pitch -= deltaY * MouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
         Mouse.SetPosition(screenCenterX, screenCenterY);
+        var postSet = Mouse.GetState();
+        _anchorX = postSet.X;
+        _anchorY = postSet.Y;
 
         UpdateVectors();
         UpdateViewMatrix();

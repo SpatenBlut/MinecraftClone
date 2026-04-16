@@ -39,7 +39,7 @@ public class PauseMenu
     // ── Settings (Game1 reads and applies these) ──────────────────────────────
     // Sensitivity is stored internally as Minecraft % (0-200) and converted on get/set.
     // Minecraft formula: s = pct/200, f = (s*0.6+0.2)^3 * 8, rad/px = f*0.15*(π/180)
-    private float _sensPct = 36f;   // ~0.0006 rad/px default
+    private float _sensPct = 50f;   // Minecraft default (0-100 range, 50 = internal 0.5)
 
     public float MouseSensitivity
     {
@@ -49,7 +49,7 @@ public class PauseMenu
 
     private static float SensPctToRad(float pct)
     {
-        float s = pct / 200f;
+        float s = pct / 100f;
         float f = s * 0.6f + 0.2f;
         return f * f * f * 8.0f * 0.15f * (MathF.PI / 180f);
     }
@@ -57,10 +57,10 @@ public class PauseMenu
     private static float RadToSensPct(float rad)
     {
         float cbrt = MathF.Cbrt(rad / (0.15f * (MathF.PI / 180f) * 8.0f));
-        return Math.Clamp((cbrt - 0.2f) / 0.6f * 200f, 0f, 200f);
+        return Math.Clamp((cbrt - 0.2f) / 0.6f * 100f, 0f, 100f);
     }
 
-    public float Fov { get; set; } = 75f;
+    public float Fov { get; set; } = 70f;
 
     // ── Single-frame intent flags ─────────────────────────────────────────────
     public bool WantsResume   { get; private set; }
@@ -219,10 +219,10 @@ public class PauseMenu
 
         int ry = wy + TPad + TH;
 
-        DrawSlider(sb, wx, ry, "Mouse Sensitivity", $"{_sensPct:F0}%", _sensPct / 200f);
+        DrawSlider(sb, wx, ry, "Mouse Sensitivity", $"{_sensPct:F0}%", _sensPct / 100f);
         ry += RowH;
 
-        DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 40f) / 80f);
+        DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 30f) / 80f);
         ry += RowH + 20;
 
         int bx   = wx + (PW - BW) / 2;
@@ -258,12 +258,12 @@ public class PauseMenu
             if (_dragging == DragTarget.Sensitivity)
             {
                 float t = Math.Clamp((mx - sensTrack.X) / (float)sensTrack.Width, 0f, 1f);
-                _sensPct = MathF.Round(t * 200f);
+                _sensPct = MathF.Round(t * 100f);
             }
             else if (_dragging == DragTarget.Fov)
             {
                 float t = Math.Clamp((mx - fovTrack.X) / (float)fovTrack.Width, 0f, 1f);
-                Fov = MathF.Round(40f + t * 80f);
+                Fov = MathF.Round(30f + t * 80f);
             }
         }
 
