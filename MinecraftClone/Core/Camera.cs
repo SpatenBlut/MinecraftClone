@@ -27,7 +27,8 @@ public class Camera
     private float _currentFov = 70f;
     public bool IsSprinting { private get; set; }
 
-    private bool _firstMouseMove = true;
+    private bool _firstMouseMove  = true;
+    private bool _skipMouseFrame  = false;
     private int  _anchorX, _anchorY;
 
     public Camera(Vector3 position, float aspectRatio)
@@ -66,18 +67,28 @@ public class Camera
             return;
         }
 
-        // Mouse input - Maus in Bildschirmmitte zentrieren
+        // Mouse input
         var mouseState = Mouse.GetState();
-        int screenCenterX = graphicsDevice.Viewport.Width / 2;
+        int screenCenterX = graphicsDevice.Viewport.Width  / 2;
         int screenCenterY = graphicsDevice.Viewport.Height / 2;
 
+        // Beim ersten Frame (Start / nach Menü): Cursor zentrieren, nächsten Frame skippen
         if (_firstMouseMove)
         {
             Mouse.SetPosition(screenCenterX, screenCenterY);
             _firstMouseMove = false;
-            var after = Mouse.GetState();
-            _anchorX = after.X;
-            _anchorY = after.Y;
+            _skipMouseFrame = true;
+            UpdateVectors();
+            UpdateViewMatrix();
+            return;
+        }
+
+        // Frame nach SetPosition skippen — Cursor-Position erst dann verlässlich lesen
+        if (_skipMouseFrame)
+        {
+            _skipMouseFrame = false;
+            _anchorX = mouseState.X;
+            _anchorY = mouseState.Y;
             UpdateVectors();
             UpdateViewMatrix();
             return;
@@ -85,15 +96,21 @@ public class Camera
 
         float deltaX = mouseState.X - _anchorX;
         float deltaY = mouseState.Y - _anchorY;
+        _anchorX = mouseState.X;
+        _anchorY = mouseState.Y;
 
         _yaw += deltaX * MouseSensitivity;
         _pitch -= deltaY * MouseSensitivity;
         _pitch = MathHelper.Clamp(_pitch, -MathHelper.PiOver2 + 0.01f, MathHelper.PiOver2 - 0.01f);
 
-        Mouse.SetPosition(screenCenterX, screenCenterY);
-        var postSet = Mouse.GetState();
-        _anchorX = postSet.X;
-        _anchorY = postSet.Y;
+        // Cursor neu zentrieren wenn er den Bildschirmrand erreicht
+        int margin = 80;
+        if (mouseState.X < margin || mouseState.X > screenCenterX * 2 - margin ||
+            mouseState.Y < margin || mouseState.Y > screenCenterY * 2 - margin)
+        {
+            Mouse.SetPosition(screenCenterX, screenCenterY);
+            _skipMouseFrame = true;
+        }
 
         UpdateVectors();
         UpdateViewMatrix();

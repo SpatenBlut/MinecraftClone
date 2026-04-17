@@ -85,11 +85,11 @@ public class PauseMenu
     private const int StH  = 36;    // stats row height
 
     // ── Font scales ───────────────────────────────────────────────────────────
-    private const float FsTitle = 0.78f;
-    private const float FsBtn   = 0.52f;
-    private const float FsLabel = 0.42f;
-    private const float FsValue = 0.40f;
-    private const float FsStat  = 0.38f;
+    private const float FsTitle = 1.56f;
+    private const float FsBtn   = 1.04f;
+    private const float FsLabel = 0.84f;
+    private const float FsValue = 0.80f;
+    private const float FsStat  = 0.76f;
 
     public PauseMenu(GraphicsDevice gd, SpriteFont font)
     {

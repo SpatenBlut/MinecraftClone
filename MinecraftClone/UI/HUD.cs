@@ -152,17 +152,17 @@ public class HUD
     private void DrawFps(SpriteBatch sb, int sw)
     {
         string t = $"FPS: {(int)_smoothFps}";
-        Vector2 sz = _font.MeasureString(t) * 0.33f;
+        Vector2 sz = _font.MeasureString(t) * 0.66f;
         sb.DrawString(_font, t, new Vector2(sw - sz.X - 10, 10),
-            Color.White, 0f, Vector2.Zero, 0.33f, SpriteEffects.None, 0f);
+            Color.White, 0f, Vector2.Zero, 0.66f, SpriteEffects.None, 0f);
     }
 
     private void DrawDebugInfo(SpriteBatch sb, Player player, int x, int y)
     {
         sb.DrawString(_font, $"Pos: {player.Position.X:F1}, {player.Position.Y:F1}, {player.Position.Z:F1}",
-            new Vector2(x, y), Color.White, 0f, Vector2.Zero, 0.31f, SpriteEffects.None, 0f);
+            new Vector2(x, y), Color.White, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 0f);
         sb.DrawString(_font, $"Vel: {player.Velocity.X:F1}, {player.Velocity.Y:F1}, {player.Velocity.Z:F1}",
-            new Vector2(x, y + 20), Color.White, 0f, Vector2.Zero, 0.31f, SpriteEffects.None, 0f);
+            new Vector2(x, y + 20), Color.White, 0f, Vector2.Zero, 0.62f, SpriteEffects.None, 0f);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -201,8 +201,21 @@ public class HUD
     // ── Label mit Schatten (Dark Steel) ──────────────────────────────────────
     private void DsLabel(SpriteBatch sb, string text, int wx, int wy, int gx, int gy, int sc)
     {
-        float s = sc * 0.18f;
+        float s = sc * 0.36f;
         var pos = new Vector2(wx + gx * sc, wy + gy * sc);
+        sb.DrawString(_font, text, pos + new Vector2(sc * 0.5f, sc * 0.5f),
+            DsDark, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
+        sb.DrawString(_font, text, pos, DsText, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
+    }
+
+    // ── Label zentriert über einem Bereich ───────────────────────────────────
+    private void DsLabelCentered(SpriteBatch sb, string text, int wx, int wy, int gx, int gy, int areaW, int sc)
+    {
+        float s = sc * 0.36f;
+        float textW = _font.MeasureString(text).X * s;
+        float cx = wx + gx * sc + (areaW * sc - textW) / 2f;
+        float cy = wy + gy * sc;
+        var pos = new Vector2(cx, cy);
         sb.DrawString(_font, text, pos + new Vector2(sc * 0.5f, sc * 0.5f),
             DsDark, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
         sb.DrawString(_font, text, pos, DsText, 0f, Vector2.Zero, s, SpriteEffects.None, 0f);
@@ -259,7 +272,7 @@ public class HUD
         }
 
         // ── Crafting-Label + 2×2 Grid (direkt rechts, Reihen 2+3) ───────────
-        DsLabel(sb, "Crafting", wx, wy, 208, 14, sc);
+        DsLabelCentered(sb, "Crafting", wx, wy, 202, 14, 37, sc);
         int[] cGx = { 202, 221, 202, 221 };
         int[] cGy = {  27,  27,  46,  46 };
         for (int i = 0; i < 4; i++)
@@ -361,7 +374,7 @@ public class HUD
     {
         if (item.IsEmpty) return;
 
-        int pad  = sc * 3;
+        int pad  = sc * 1;
         var dest = new Rectangle(slotRect.X + pad, slotRect.Y + pad,
                                  slotRect.Width - 2 * pad, slotRect.Height - 2 * pad);
 
@@ -370,7 +383,7 @@ public class HUD
         if (drawCount && item.Count > 1)
         {
             string s     = item.Count.ToString();
-            float  fsc   = sc * 0.17f;
+            float  fsc   = sc * 0.34f;
             Vector2 size = _font.MeasureString(s) * fsc;
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - sc + sc * 0.5f,
@@ -396,7 +409,7 @@ public class HUD
         if (drawCount && item.Count > 1)
         {
             string s     = item.Count.ToString();
-            float  fsc   = 0.33f;
+            float  fsc   = 0.9f;
             Vector2 size = _font.MeasureString(s) * fsc;
             sb.DrawString(_font, s,
                 new Vector2(slotRect.Right - size.X - 2, slotRect.Bottom - size.Y - 2),
