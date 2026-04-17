@@ -22,9 +22,12 @@ public class Game1 : Game
     private HUD         _hud;
     private PauseMenu   _pauseMenu;
 
-    private BlockEffect _basicEffect;
-    private Texture2D   _blockAtlas;
-    private SpriteFont  _font;
+    private BlockEffect  _basicEffect;
+    private BlockOutline _blockOutline;
+    private Texture2D    _blockAtlas;
+    private SpriteFont   _font;
+
+    private Vector3? _targetBlock;
 
     // Sky
     private Texture2D _skyGradient;
@@ -96,8 +99,9 @@ public class Game1 : Game
         _blockAtlas  = Content.Load<Texture2D>("Textures/atlas");
         _sunTexture  = Content.Load<Texture2D>("Textures/sun");
         _font        = Content.Load<SpriteFont>("Font");
-        _hud         = new HUD(GraphicsDevice, _font, _blockAtlas);
-        _pauseMenu   = new PauseMenu(GraphicsDevice, _font);
+        _hud          = new HUD(GraphicsDevice, _font, _blockAtlas);
+        _pauseMenu    = new PauseMenu(GraphicsDevice, _font);
+        _blockOutline = new BlockOutline(GraphicsDevice);
 
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
@@ -228,6 +232,13 @@ public class Game1 : Game
         _player.SetRenderPosition(interpAlpha, (float)gameTime.ElapsedGameTime.TotalSeconds);
         _player.UpdateCamera(gameTime, GraphicsDevice, captureMouseInput: !menuActive);
 
+        // ── Zielblock bestimmen (jeden Frame) ────────────────────────────────
+        if (!menuActive && Raycast.CastRay(_world, _player.Camera.Position,
+                _player.Camera.Forward, 5f, out Vector3 hb, out _))
+            _targetBlock = hb;
+        else
+            _targetBlock = null;
+
         // ── Block interaction (only when playing freely) ──────────────────────
         if (!menuActive)
         {
@@ -303,6 +314,11 @@ public class Game1 : Game
         _basicEffect.Apply();
 
         _chunkMesh.Draw();
+
+        // Block-Outline
+        if (_targetBlock.HasValue)
+            _blockOutline.Draw(_targetBlock.Value, _player.Camera.Position,
+                _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
 
         // HUD
         var ms = Mouse.GetState();
