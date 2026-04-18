@@ -23,9 +23,22 @@ public class Game1 : Game
     private HUD         _hud;
     private PauseMenu   _pauseMenu;
 
-    private BlockEffect    _basicEffect;
-    private BlockOutline   _blockOutline;
-    private BlockMiningBar _blockMiningBar;
+    private BlockEffect      _basicEffect;
+    private BlockOutline     _blockOutline;
+    private BlockMiningBar   _blockMiningBar;
+    private Effect           _fxaaEffect;
+    private RenderTarget2D   _sceneTarget;
+
+    // Full-screen quad in NDC space for the FXAA blit pass
+    private static readonly VertexPositionTexture[] FxaaQuad =
+    {
+        new(new Vector3(-1,  1, 0), new Vector2(0, 0)),
+        new(new Vector3( 1,  1, 0), new Vector2(1, 0)),
+        new(new Vector3( 1, -1, 0), new Vector2(1, 1)),
+        new(new Vector3(-1,  1, 0), new Vector2(0, 0)),
+        new(new Vector3( 1, -1, 0), new Vector2(1, 1)),
+        new(new Vector3(-1, -1, 0), new Vector2(0, 1)),
+    };
     private PlayerArm      _playerArm;
     private PlayerHeldItem _playerHeldItem;
     private PlayerModel    _playerModel;
@@ -118,6 +131,12 @@ public class Game1 : Game
         _pauseMenu    = new PauseMenu(GraphicsDevice, _font);
         _blockOutline   = new BlockOutline(GraphicsDevice);
         _blockMiningBar = new BlockMiningBar(GraphicsDevice);
+        _fxaaEffect     = Content.Load<Effect>("FXAA");
+        _sceneTarget    = new RenderTarget2D(
+            GraphicsDevice,
+            GraphicsDevice.PresentationParameters.BackBufferWidth,
+            GraphicsDevice.PresentationParameters.BackBufferHeight,
+            false, SurfaceFormat.Color, DepthFormat.Depth24Stencil8);
         _playerArm      = new PlayerArm(GraphicsDevice);
         _playerHeldItem = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
         _playerModel    = new PlayerModel(GraphicsDevice);
@@ -370,9 +389,11 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
-        int screenW = GraphicsDevice.Viewport.Width;
-        int screenH = GraphicsDevice.Viewport.Height;
+        int screenW = GraphicsDevice.PresentationParameters.BackBufferWidth;
+        int screenH = GraphicsDevice.PresentationParameters.BackBufferHeight;
 
+        // ── Render scene into off-screen target (FXAA reads from this) ──────────
+        GraphicsDevice.SetRenderTarget(_sceneTarget);
         GraphicsDevice.Clear(Color.Black);
 
         // Sky gradient
@@ -440,13 +461,30 @@ public class Game1 : Game
                     _pauseMenu.HandOffsetZ, _pauseMenu.HandScale);
         }
 
-        // HUD
+        // ── FXAA pass — blit scene target to backbuffer with anti-aliasing ──────
+        GraphicsDevice.SetRenderTarget(null);
+        GraphicsDevice.Clear(Color.Black);
+
+        _fxaaEffect.Parameters["SceneTexture"].SetValue(_sceneTarget);
+        _fxaaEffect.Parameters["InverseViewportSize"].SetValue(
+            new Vector2(1f / screenW, 1f / screenH));
+
+        GraphicsDevice.BlendState        = BlendState.Opaque;
+        GraphicsDevice.DepthStencilState = DepthStencilState.None;
+        GraphicsDevice.RasterizerState   = RasterizerState.CullNone;
+
+        foreach (var pass in _fxaaEffect.CurrentTechnique.Passes)
+        {
+            pass.Apply();
+            GraphicsDevice.DrawUserPrimitives(PrimitiveType.TriangleList, FxaaQuad, 0, 2);
+        }
+
+        // ── HUD and pause menu — drawn directly on screen (no FXAA blur on UI) ─
         var ms = Mouse.GetState();
         _hud.Draw(_spriteBatch, _player, _inventory, screenW, screenH, gameTime,
             _inventoryOpen, ms.X, ms.Y,
             showCrosshair: _player.Camera.Mode == CameraMode.FirstPerson);
 
-        // Pause menu overlay
         if (_paused)
         {
             _spriteBatch.Begin();
