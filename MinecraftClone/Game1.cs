@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using MinecraftClone.Core;
 using MinecraftClone.Gameplay;
 using MinecraftClone.Rendering;
 using MinecraftClone.UI;
@@ -26,6 +27,7 @@ public class Game1 : Game
     private BlockOutline   _blockOutline;
     private PlayerArm      _playerArm;
     private PlayerHeldItem _playerHeldItem;
+    private PlayerModel    _playerModel;
     private Texture2D      _blockAtlas;
     private SpriteFont   _font;
 
@@ -42,6 +44,9 @@ public class Game1 : Game
     private bool _needsMeshRebuild = false;
     private bool _inventoryOpen    = false;
     private bool _paused           = false;
+
+    // Third-person body rotation (smoothed, lags behind camera yaw like MC)
+    private float _bodyYaw = 0f;
 
     // Mining
     private Vector3? _miningTarget   = null;
@@ -112,6 +117,7 @@ public class Game1 : Game
         _blockOutline = new BlockOutline(GraphicsDevice);
         _playerArm      = new PlayerArm(GraphicsDevice);
         _playerHeldItem = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
+        _playerModel    = new PlayerModel(GraphicsDevice);
 
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
@@ -242,6 +248,26 @@ public class Game1 : Game
         _player.SetRenderPosition(interpAlpha, (float)gameTime.ElapsedGameTime.TotalSeconds);
         _player.UpdateCamera(gameTime, GraphicsDevice, captureMouseInput: !menuActive);
 
+        // ── Body yaw — MC-faithful delayed body rotation ─────────────────────
+        {
+            float dt   = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            float diff = WrapAngle(_player.Camera.Yaw - _bodyYaw);
+            bool  moving = MathF.Abs(_player.Velocity.X) > 0.01f
+                        || MathF.Abs(_player.Velocity.Z) > 0.01f;
+            if (moving)
+            {
+                // Smooth follow while walking (MC: bodyYaw += diff * 0.3 per tick)
+                _bodyYaw += diff * 6f * dt;
+            }
+            else
+            {
+                // Standing: snap only when head exceeds 75° offset from body
+                const float MaxOff = 75f * MathHelper.Pi / 180f;
+                if (MathF.Abs(diff) > MaxOff)
+                    _bodyYaw += diff - MathF.Sign(diff) * MaxOff;
+            }
+        }
+
         // ── Zielblock bestimmen (jeden Frame) ────────────────────────────────
         if (!menuActive && Raycast.CastRay(_world, _player.Camera.Position,
                 _player.Camera.Forward, 5f, out Vector3 hb, out _))
@@ -314,6 +340,16 @@ public class Game1 : Game
 
         if (keyState.IsKeyDown(Keys.F5) && _lastKeyState.IsKeyUp(Keys.F5))
         {
+            _player.Camera.Mode = _player.Camera.Mode switch
+            {
+                CameraMode.FirstPerson     => CameraMode.ThirdPersonBack,
+                CameraMode.ThirdPersonBack => CameraMode.ThirdPersonFront,
+                _                          => CameraMode.FirstPerson,
+            };
+        }
+
+        if (keyState.IsKeyDown(Keys.F6) && _lastKeyState.IsKeyUp(Keys.F6))
+        {
             string worldPath = Path.Combine(Content.RootDirectory, "Worlds", "world1.dat");
             _world.SaveToFile(worldPath);
         }
@@ -348,7 +384,7 @@ public class Game1 : Game
         _basicEffect.View           = _player.Camera.ViewMatrix;
         _basicEffect.Projection     = _player.Camera.ProjectionMatrix;
         _basicEffect.Texture        = _blockAtlas;
-        _basicEffect.CameraPosition = _player.Camera.Position;
+        _basicEffect.CameraPosition = _player.Camera.ViewPosition;
         _basicEffect.DayBrightness  = 1.0f;
         _basicEffect.FogColor       = SkyHorizon.ToVector3();
         _basicEffect.FogStart       = 48f;
@@ -362,15 +398,24 @@ public class Game1 : Game
             _blockOutline.Draw(_targetBlock.Value, _player.Camera.Position,
                 _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
 
-        // First-person hand — arm when empty, held block when carrying something
-        GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
-        var heldBlock = _inventory.SelectedBlock;
-        if (heldBlock == BlockType.Air)
-            _playerArm.Draw(_player.Camera, _player.SwingProgress);
-        else
-            _playerHeldItem.Draw(_player.Camera, heldBlock,
-                _pauseMenu.HandOffsetX, _pauseMenu.HandOffsetY,
-                _pauseMenu.HandOffsetZ, _pauseMenu.HandScale);
+        // Player model (third person only)
+        if (_player.Camera.Mode != CameraMode.FirstPerson)
+            _playerModel.Draw(_player.RenderPosition,
+                _bodyYaw, _player.Camera.Yaw, _player.Camera.Pitch,
+                _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
+
+        // First-person hand — only in first person
+        if (_player.Camera.Mode == CameraMode.FirstPerson)
+        {
+            GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
+            var heldBlock = _inventory.SelectedBlock;
+            if (heldBlock == BlockType.Air)
+                _playerArm.Draw(_player.Camera, _player.SwingProgress);
+            else
+                _playerHeldItem.Draw(_player.Camera, heldBlock,
+                    _pauseMenu.HandOffsetX, _pauseMenu.HandOffsetY,
+                    _pauseMenu.HandOffsetZ, _pauseMenu.HandScale);
+        }
 
         // HUD
         var ms = Mouse.GetState();
@@ -390,7 +435,7 @@ public class Game1 : Game
 
     private void DrawSun2D(int screenW, int screenH)
     {
-        Vector3 sunWorldPos = _player.Camera.Position + SunDirection * 500f;
+        Vector3 sunWorldPos = _player.Camera.ViewPosition + SunDirection * 500f;
         Matrix viewProj = _player.Camera.ViewMatrix * _player.Camera.ProjectionMatrix;
         Vector4 clip = Vector4.Transform(new Vector4(sunWorldPos, 1f), viewProj);
 
@@ -408,6 +453,14 @@ public class Game1 : Game
         _spriteBatch.Draw(_sunTexture,
             new Rectangle(sx - sunSize / 2, sy - sunSize / 2, sunSize, sunSize),
             Color.White);
+    }
+
+    private static float WrapAngle(float r)
+    {
+        r %= MathHelper.TwoPi;
+        if (r >  MathHelper.Pi) r -= MathHelper.TwoPi;
+        if (r < -MathHelper.Pi) r += MathHelper.TwoPi;
+        return r;
     }
 
     // Minecraft bare-hand break times: hardness * 1.5 seconds

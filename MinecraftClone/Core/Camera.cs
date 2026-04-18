@@ -5,6 +5,8 @@ using Microsoft.Xna.Framework.Input;
 
 namespace MinecraftClone.Core;
 
+public enum CameraMode { FirstPerson, ThirdPersonBack, ThirdPersonFront }
+
 public class Camera
 {
     public Vector3 Position { get; set; }
@@ -12,8 +14,13 @@ public class Camera
     public Vector3 Up { get; private set; }
     public Vector3 Right { get; private set; }
 
-    public Matrix ViewMatrix { get; private set; }
+    public Matrix ViewMatrix     { get; private set; }
     public Matrix ProjectionMatrix { get; private set; }
+
+    public CameraMode Mode         { get; set; } = CameraMode.FirstPerson;
+    public float      Yaw          => _yaw;
+    public float      Pitch        => _pitch;
+    public Vector3    ViewPosition { get; private set; }
 
     private float _yaw;
     private float _pitch;
@@ -131,7 +138,22 @@ public class Camera
 
     private void UpdateViewMatrix()
     {
-        ViewMatrix = Matrix.CreateLookAt(Position, Position + Forward, Up);
+        const float Dist = 4f;
+        switch (Mode)
+        {
+            case CameraMode.ThirdPersonBack:
+                ViewPosition = Position - Forward * Dist;
+                ViewMatrix   = Matrix.CreateLookAt(ViewPosition, Position, Vector3.Up);
+                break;
+            case CameraMode.ThirdPersonFront:
+                ViewPosition = Position + Forward * Dist;
+                ViewMatrix   = Matrix.CreateLookAt(ViewPosition, Position, Vector3.Up);
+                break;
+            default:
+                ViewPosition = Position;
+                ViewMatrix   = Matrix.CreateLookAt(Position, Position + Forward, Up);
+                break;
+        }
     }
 
     // Nur ViewMatrix neu berechnen (ohne Maus-Input) — wird benutzt wenn Inventar offen ist
