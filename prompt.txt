@@ -1,0 +1,43 @@
+Reimplement the player arm rendering system from scratch in C# using MonoGame for a Minecraft-like clone. Completely discard any existing implementation.
+
+Step 1 (strict scope):
+Implement ONLY the static first-person arm positioning. Do NOT implement any animations or transitions.
+
+Rendering requirements:
+
+Render the arm as a first-person overlay, not as a world object or block
+The arm must behave like in Minecraft Java Edition version 1.21.11, meaning:
+It is rendered after the world
+It is camera-relative, not placed in world space
+It always stays in the correct screen position regardless of world movement
+
+Positioning requirements:
+
+Precisely match the arm position, rotation, pivot/origin, and scale from Minecraft Java Edition 1.21.11
+Use the same conceptual transformation approach:
+Camera-based transformations
+Proper matrix usage (translation, rotation, scale)
+Correct rotation order (important for accurate replication)
+Ensure the arm visually aligns as close as possible to a 1:1 match with the original game
+
+Temporary visuals:
+
+There are currently no textures available
+Render the arm using a simple solid skin-like color (e.g., light beige)
+Do NOT implement texture loading yet
+
+Constraints:
+
+No animation
+No interpolation or smoothing
+No placeholder hacks that differ from the intended final structure
+Do NOT simplify the transformation logic
+
+Technical expectations:
+
+Use MonoGame’s rendering pipeline appropriately (e.g., SpriteBatch or 3D depending on approach)
+Structure the code so animations can be added later without refactoring the core logic
+Keep transformations modular and explicit
+
+Goal:
+Create a clean, accurate baseline implementation of the first-person arm overlay, matching Minecraft’s behavior as closely as possible, ready for future animation and texture integration.

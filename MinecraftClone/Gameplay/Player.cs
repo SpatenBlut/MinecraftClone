@@ -58,6 +58,11 @@ public class Player
     public Vector3 RenderPosition;
     private float _currentEyeHeight = NormalEyeHeight;
 
+    // Arm-Swing-Animation
+    public float SwingProgress { get; private set; }
+    private float _swingTimer = 0f;
+    private const float SwingDuration = 0.3f;
+
     // Smooth Sneak-Übergang (nicht instant wie in Minecraft)
     private float _smoothEyeHeight = NormalEyeHeight;
     private const float EyeHeightSpeed = 4f; // Einheiten/Sekunde
@@ -156,10 +161,19 @@ public class Player
         PreviousPosition = Position;
     }
 
+    public void TriggerSwing() => _swingTimer = SwingDuration;
+
     // Setzt die interpolierte Render-Position (alpha = 0..1 zwischen letztem und aktuellem Tick)
     public void SetRenderPosition(float alpha, float deltaTime)
     {
         RenderPosition = Vector3.Lerp(PreviousPosition, Position, alpha);
+
+        if (_swingTimer > 0f)
+        {
+            _swingTimer -= deltaTime;
+            if (_swingTimer < 0f) _swingTimer = 0f;
+        }
+        SwingProgress = _swingTimer > 0f ? 1f - _swingTimer / SwingDuration : 0f;
 
         // Augenhöhe smooth Richtung Ziel bewegen (Sneak-Übergang wie Minecraft)
         float step = EyeHeightSpeed * deltaTime;

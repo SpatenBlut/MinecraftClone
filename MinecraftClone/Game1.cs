@@ -24,6 +24,7 @@ public class Game1 : Game
 
     private BlockEffect  _basicEffect;
     private BlockOutline _blockOutline;
+    private PlayerArm    _playerArm;
     private Texture2D    _blockAtlas;
     private SpriteFont   _font;
 
@@ -102,6 +103,7 @@ public class Game1 : Game
         _hud          = new HUD(GraphicsDevice, _font, _blockAtlas);
         _pauseMenu    = new PauseMenu(GraphicsDevice, _font);
         _blockOutline = new BlockOutline(GraphicsDevice);
+        _playerArm    = new PlayerArm(GraphicsDevice);
 
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
@@ -246,6 +248,7 @@ public class Game1 : Game
             {
                 if (_player.TryBreakBlock(_world, out _, out _))
                 {
+                    _player.TriggerSwing();
                     _blocksBroken++;
                     _needsMeshRebuild = true;
                 }
@@ -255,6 +258,7 @@ public class Game1 : Game
             {
                 if (_player.TryPlaceBlock(_world, _inventory.SelectedBlock, out _))
                 {
+                    _player.TriggerSwing();
                     _inventory.ConsumeFromSelected();
                     _blocksPlaced++;
                     _needsMeshRebuild = true;
@@ -319,6 +323,13 @@ public class Game1 : Game
         if (_targetBlock.HasValue)
             _blockOutline.Draw(_targetBlock.Value, _player.Camera.Position,
                 _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
+
+        // Right arm — only shown when holding nothing (empty hotbar slot)
+        if (_inventory.SelectedBlock == BlockType.Air)
+        {
+            GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
+            _playerArm.Draw(_player.Camera);
+        }
 
         // HUD
         var ms = Mouse.GetState();
