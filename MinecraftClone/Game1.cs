@@ -22,10 +22,11 @@ public class Game1 : Game
     private HUD         _hud;
     private PauseMenu   _pauseMenu;
 
-    private BlockEffect  _basicEffect;
-    private BlockOutline _blockOutline;
-    private PlayerArm    _playerArm;
-    private Texture2D    _blockAtlas;
+    private BlockEffect    _basicEffect;
+    private BlockOutline   _blockOutline;
+    private PlayerArm      _playerArm;
+    private PlayerHeldItem _playerHeldItem;
+    private Texture2D      _blockAtlas;
     private SpriteFont   _font;
 
     private Vector3? _targetBlock;
@@ -103,7 +104,8 @@ public class Game1 : Game
         _hud          = new HUD(GraphicsDevice, _font, _blockAtlas);
         _pauseMenu    = new PauseMenu(GraphicsDevice, _font);
         _blockOutline = new BlockOutline(GraphicsDevice);
-        _playerArm    = new PlayerArm(GraphicsDevice);
+        _playerArm      = new PlayerArm(GraphicsDevice);
+        _playerHeldItem = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
 
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
@@ -324,12 +326,15 @@ public class Game1 : Game
             _blockOutline.Draw(_targetBlock.Value, _player.Camera.Position,
                 _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
 
-        // Right arm — only shown when holding nothing (empty hotbar slot)
-        if (_inventory.SelectedBlock == BlockType.Air)
-        {
-            GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
+        // First-person hand — arm when empty, held block when carrying something
+        GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
+        var heldBlock = _inventory.SelectedBlock;
+        if (heldBlock == BlockType.Air)
             _playerArm.Draw(_player.Camera);
-        }
+        else
+            _playerHeldItem.Draw(_player.Camera, heldBlock,
+                _pauseMenu.HandOffsetX, _pauseMenu.HandOffsetY,
+                _pauseMenu.HandOffsetZ, _pauseMenu.HandScale);
 
         // HUD
         var ms = Mouse.GetState();

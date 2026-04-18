@@ -9,8 +9,8 @@ namespace MinecraftClone.UI;
 
 public class PauseMenu
 {
-    private enum Screen     { Main, Settings, Stats }
-    private enum DragTarget { None, Sensitivity, Fov }
+    private enum Screen     { Main, Settings, Stats, Hand }
+    private enum DragTarget { None, Sensitivity, Fov, HandX, HandY, HandZ, HandScale }
 
     private Screen     _screen;
     private DragTarget _dragging = DragTarget.None;
@@ -62,6 +62,12 @@ public class PauseMenu
 
     public float Fov    { get; set; } = 70f;
     public bool  VSync  { get; set; } = false;
+
+    // ── Hand / held-item position (camera-space, matches MC 1.21 defaults) ────
+    public float HandOffsetX { get; set; } =  0.67f;
+    public float HandOffsetY { get; set; } = -0.70f;
+    public float HandOffsetZ { get; set; } = -1.28f;
+    public float HandScale   { get; set; } =  0.33f;
 
     // ── Single-frame intent flags ─────────────────────────────────────────────
     public bool WantsResume   { get; private set; }
@@ -137,6 +143,7 @@ public class PauseMenu
             case Screen.Main:     if (clicked) HandleMain(mx, my, sw, sh);                  break;
             case Screen.Settings: HandleSettings(mx, my, sw, sh, clicked, held, released);  break;
             case Screen.Stats:    if (clicked) HandleStats(mx, my, sw, sh);                  break;
+            case Screen.Hand:     HandleHand(mx, my, sw, sh, clicked, held, released);      break;
         }
     }
 
@@ -150,6 +157,7 @@ public class PauseMenu
             case Screen.Main:     DrawMain(sb, sw, sh, mx, my);          break;
             case Screen.Settings: DrawSettings(sb, sw, sh, mx, my);      break;
             case Screen.Stats:    DrawStats(sb, player, sw, sh, mx, my); break;
+            case Screen.Hand:     DrawHand(sb, sw, sh, mx, my);          break;
         }
     }
 
@@ -160,6 +168,7 @@ public class PauseMenu
         ("Main Menu",  false, false),
         ("Settings",   false, false),
         ("Statistics", false, false),
+        ("Hand",       false, false),
         ("Leave",      true,  false),
     };
 
@@ -196,7 +205,8 @@ public class PauseMenu
         if      (btns[0].Contains(mx, my)) WantsMainMenu = true;
         else if (btns[1].Contains(mx, my)) _screen       = Screen.Settings;
         else if (btns[2].Contains(mx, my)) _screen       = Screen.Stats;
-        else if (btns[3].Contains(mx, my)) WantsQuit     = true;
+        else if (btns[3].Contains(mx, my)) _screen       = Screen.Hand;
+        else if (btns[4].Contains(mx, my)) WantsQuit     = true;
     }
 
     // ══════════════════════════ SETTINGS ══════════════════════════════════════
@@ -282,6 +292,112 @@ public class PauseMenu
             if (new Rectangle(bx, vsyncY, BW, BH).Contains(mx, my))
                 VSync = !VSync;
             else if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
+            {
+                _dragging = DragTarget.None;
+                _screen   = Screen.Main;
+            }
+        }
+    }
+
+    // ════════════════════════════ HAND ════════════════════════════════════════
+
+    private (int wx, int wy, int ph) HandLayout(int sw, int sh)
+    {
+        int ph = TPad + TH + 4 * RowH + 20 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+    }
+
+    private void DrawHand(SpriteBatch sb, int sw, int sh, int mx, int my)
+    {
+        var (wx, wy, ph) = HandLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "HAND", wx, wy);
+
+        int ry = wy + TPad + TH;
+
+        // X: -2.0 .. +2.0,  t = (v+2)/4
+        DrawSlider(sb, wx, ry, "Left / Right", $"{HandOffsetX:F2}",
+            (HandOffsetX + 2f) / 4f);
+        ry += RowH;
+
+        // Y: -2.0 .. +2.0
+        DrawSlider(sb, wx, ry, "Up / Down", $"{HandOffsetY:F2}",
+            (HandOffsetY + 2f) / 4f);
+        ry += RowH;
+
+        // Scale: 0.05 .. 1.00,  t = (v-0.05)/0.95
+        DrawSlider(sb, wx, ry, "Scale", $"{HandScale:F2}x",
+            (HandScale - 0.05f) / 0.95f);
+        ry += RowH;
+
+        // Z: -2.0 .. +0.5,  t = (v+2)/2.5
+        DrawSlider(sb, wx, ry, "Forward / Back", $"{HandOffsetZ:F2}",
+            (HandOffsetZ + 2f) / 2.5f);
+        ry += RowH + 20;
+
+        int bx   = wx + (PW - BW) / 2;
+        var back = new Rectangle(bx, ry, BW, BH);
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void HandleHand(int mx, int my, int sw, int sh,
+                            bool clicked, bool held, bool released)
+    {
+        var (wx, wy, _) = HandLayout(sw, sh);
+        int ry0 = wy + TPad + TH;
+        int ry1 = ry0 + RowH;
+        int ry2 = ry1 + RowH;
+        int ry3 = ry2 + RowH;
+
+        var xTrack = SliderTrack(wx, ry0);
+        var yTrack = SliderTrack(wx, ry1);
+        var sTrack = SliderTrack(wx, ry2);
+        var zTrack = SliderTrack(wx, ry3);
+
+        var xHit = new Rectangle(xTrack.X, ry0 + 4, xTrack.Width, RowH - 8);
+        var yHit = new Rectangle(yTrack.X, ry1 + 4, yTrack.Width, RowH - 8);
+        var sHit = new Rectangle(sTrack.X, ry2 + 4, sTrack.Width, RowH - 8);
+        var zHit = new Rectangle(zTrack.X, ry3 + 4, zTrack.Width, RowH - 8);
+
+        if (clicked)
+        {
+            if      (xHit.Contains(mx, my)) _dragging = DragTarget.HandX;
+            else if (yHit.Contains(mx, my)) _dragging = DragTarget.HandY;
+            else if (sHit.Contains(mx, my)) _dragging = DragTarget.HandScale;
+            else if (zHit.Contains(mx, my)) _dragging = DragTarget.HandZ;
+        }
+
+        if (released) _dragging = DragTarget.None;
+
+        if (held)
+        {
+            if (_dragging == DragTarget.HandX)
+            {
+                float t = Math.Clamp((mx - xTrack.X) / (float)xTrack.Width, 0f, 1f);
+                HandOffsetX = MathF.Round((-2f + t * 4f) * 100f) / 100f;
+            }
+            else if (_dragging == DragTarget.HandY)
+            {
+                float t = Math.Clamp((mx - yTrack.X) / (float)yTrack.Width, 0f, 1f);
+                HandOffsetY = MathF.Round((-2f + t * 4f) * 100f) / 100f;
+            }
+            else if (_dragging == DragTarget.HandScale)
+            {
+                float t = Math.Clamp((mx - sTrack.X) / (float)sTrack.Width, 0f, 1f);
+                HandScale = MathF.Round((0.05f + t * 0.95f) * 100f) / 100f;
+            }
+            else if (_dragging == DragTarget.HandZ)
+            {
+                float t = Math.Clamp((mx - zTrack.X) / (float)zTrack.Width, 0f, 1f);
+                HandOffsetZ = MathF.Round((-2f + t * 2.5f) * 100f) / 100f;
+            }
+        }
+
+        if (clicked)
+        {
+            int bx    = wx + (PW - BW) / 2;
+            int backY = ry3 + RowH + 20;
+            if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
             {
                 _dragging = DragTarget.None;
                 _screen   = Screen.Main;
