@@ -9,12 +9,17 @@ namespace MinecraftClone.Gameplay;
 public struct ItemStack
 {
     public BlockType Block;
+    public ToolType  Tool;
     public int Count;
 
-    public bool IsEmpty => Block == BlockType.Air || Count <= 0;
-    public static ItemStack Empty => new() { Block = BlockType.Air, Count = 0 };
+    public bool IsEmpty  => Count <= 0 || (Block == BlockType.Air && Tool == ToolType.None);
+    public bool IsTool   => Tool != ToolType.None;
+    public bool IsBlock  => !IsTool && Block != BlockType.Air;
 
-    public ItemStack(BlockType block, int count) { Block = block; Count = count; }
+    public static ItemStack Empty => new() { Block = BlockType.Air, Tool = ToolType.None, Count = 0 };
+
+    public ItemStack(BlockType block, int count)  { Block = block; Tool = ToolType.None; Count = count; }
+    public ItemStack(ToolType  tool,  int count)  { Block = BlockType.Air; Tool = tool; Count = count; }
 }
 
 // ── Inventar ──────────────────────────────────────────────────────────────────
@@ -43,9 +48,12 @@ public class Inventory
     private KeyboardState _lastKeyState;
 
     public int SelectedSlot => _selectedSlot;
-    public BlockType SelectedBlock => _slots[_selectedSlot].IsEmpty
-        ? BlockType.Air
-        : _slots[_selectedSlot].Block;
+    public BlockType SelectedBlock => _slots[_selectedSlot].IsBlock
+        ? _slots[_selectedSlot].Block
+        : BlockType.Air;
+    public ToolType HeldTool => _slots[_selectedSlot].IsTool
+        ? _slots[_selectedSlot].Tool
+        : ToolType.None;
     public ItemStack CursorStack => _cursorStack;
 
     public ItemStack GetSlot(int idx) => idx >= 0 && idx < TotalSlots
@@ -96,10 +104,9 @@ public class Inventory
 
         int remaining = count;
 
-        // 1) Existierende Stacks gleichen Typs füllen (erst Hotbar, dann Main)
         for (int i = 0; i < MainEnd && remaining > 0; i++)
         {
-            if (_slots[i].Block == block && _slots[i].Count < MaxStack)
+            if (_slots[i].IsBlock && _slots[i].Block == block && _slots[i].Count < MaxStack)
             {
                 int space = MaxStack - _slots[i].Count;
                 int add = Math.Min(space, remaining);
@@ -108,7 +115,6 @@ public class Inventory
             }
         }
 
-        // 2) Leere Slots füllen
         for (int i = 0; i < MainEnd && remaining > 0; i++)
         {
             if (_slots[i].IsEmpty)
@@ -118,7 +124,20 @@ public class Inventory
             }
         }
 
-        return remaining < count; // true wenn mindestens 1 Item aufgenommen wurde
+        return remaining < count;
+    }
+
+    public bool AddToolToInventory(ToolType tool)
+    {
+        for (int i = 0; i < MainEnd; i++)
+        {
+            if (_slots[i].IsEmpty)
+            {
+                _slots[i] = new ItemStack(tool, 1);
+                return true;
+            }
+        }
+        return false;
     }
 
     // ── Platzieren verbraucht einen Stack-Count ───────────────────────────────

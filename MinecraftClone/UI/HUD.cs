@@ -62,7 +62,8 @@ public class HUD
 
     public void Draw(SpriteBatch sb, Player player, Inventory inventory,
         int screenWidth, int screenHeight, GameTime gameTime,
-        bool inventoryOpen = false, int mouseX = 0, int mouseY = 0)
+        bool inventoryOpen = false, int mouseX = 0, int mouseY = 0,
+        bool showCrosshair = true)
     {
         float fps = gameTime.ElapsedGameTime.TotalSeconds > 0
             ? (float)(1.0 / gameTime.ElapsedGameTime.TotalSeconds) : _smoothFps;
@@ -70,7 +71,7 @@ public class HUD
 
         sb.Begin();
 
-        if (!inventoryOpen)
+        if (!inventoryOpen && showCrosshair)
             DrawCrosshair(sb, screenWidth, screenHeight);
 
         DrawHotbar(sb, inventory, screenWidth, screenHeight, out int hotbarY, out int hotbarStartX);

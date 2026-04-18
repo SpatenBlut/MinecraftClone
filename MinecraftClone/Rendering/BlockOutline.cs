@@ -25,7 +25,7 @@ public class BlockOutline
 
     public void Draw(Vector3 block, Vector3 cameraPos, Matrix view, Matrix projection)
     {
-        const float e = 0.003f;
+        const float e = 0.0005f;
         float x0 = block.X - e, y0 = block.Y - e, z0 = block.Z - e;
         float x1 = block.X + 1 + e, y1 = block.Y + 1 + e, z1 = block.Z + 1 + e;
 
@@ -62,7 +62,12 @@ public class BlockOutline
         _effect.Projection = projection;
 
         var prevRaster = _gd.RasterizerState;
-        _gd.RasterizerState = RasterizerState.CullNone;
+        _gd.RasterizerState = new RasterizerState
+        {
+            CullMode             = CullMode.None,
+            DepthBias            = -0.00002f,
+            SlopeScaleDepthBias  = -0.5f,
+        };
 
         foreach (var pass in _effect.CurrentTechnique.Passes)
         {

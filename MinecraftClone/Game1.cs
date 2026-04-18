@@ -299,9 +299,13 @@ public class Game1 : Game
                 }
 
                 BlockType bt = _world.GetBlock((int)tb.X, (int)tb.Y, (int)tb.Z);
-                if (_miningProgress >= GetBreakTime(bt))
+                if (_miningProgress >= GetBreakTime(bt, _inventory.HeldTool))
                 {
                     _world.SetBlock((int)tb.X, (int)tb.Y, (int)tb.Z, BlockType.Air);
+                    ToolCategory req = RequiredTool(bt);
+                    bool correctTool = req == ToolCategory.None || _inventory.HeldTool.Category() == req;
+                    if (correctTool && bt != BlockType.Leaves)
+                        _inventory.AddToInventory(bt, 1);
                     _blocksBroken++;
                     _needsMeshRebuild = true;
                     _miningTarget     = null;
@@ -420,7 +424,8 @@ public class Game1 : Game
         // HUD
         var ms = Mouse.GetState();
         _hud.Draw(_spriteBatch, _player, _inventory, screenW, screenH, gameTime,
-            _inventoryOpen, ms.X, ms.Y);
+            _inventoryOpen, ms.X, ms.Y,
+            showCrosshair: _player.Camera.Mode == CameraMode.FirstPerson);
 
         // Pause menu overlay
         if (_paused)
@@ -463,8 +468,15 @@ public class Game1 : Game
         return r;
     }
 
-    // Minecraft bare-hand break times: hardness * 1.5 seconds
-    private static float GetBreakTime(BlockType block) => block switch
+    private static ToolCategory RequiredTool(BlockType block) => block switch
+    {
+        BlockType.Stone => ToolCategory.Pickaxe,
+        _               => ToolCategory.None,
+    };
+
+    // Bare-hand break times (hardness * 1.5s, matching Minecraft Java).
+    // Tool speed multipliers go here when tools are added.
+    private static float GetBreakTime(BlockType block, ToolType heldTool) => block switch
     {
         BlockType.Leaves => 0.3f,
         BlockType.Sand   => 0.75f,

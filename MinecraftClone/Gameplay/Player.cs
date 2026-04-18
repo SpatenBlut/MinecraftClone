@@ -148,7 +148,7 @@ public class Player
         }
         // ─────────────────────────────────────────────────────────────────────────
 
-        if (_isSprinting && Velocity.X == 0f && Velocity.Z == 0f && _isGrounded)
+        if (_isSprinting && (Velocity.X * Velocity.X + Velocity.Z * Velocity.Z) < 0.01f && _isGrounded)
             _isSprinting = false;
 
         CollisionBox = new AABB(Vector3.Zero, PlayerWidth, currentHeight, PlayerDepth);
@@ -253,17 +253,23 @@ public class Player
 
         if (_isGrounded && !willBunnyhop)
         {
-            // Am Boden: direkte Geschwindigkeitssetzung (sofortige Reaktion wie in Minecraft)
+            // MC ground friction: 0.91 * slipperiness(0.6) = 0.546 per tick
+            const float Friction = 0.546f;
+            Velocity.X *= Friction;
+            Velocity.Z *= Friction;
             if (moveDirection.LengthSquared() > 0)
             {
                 moveDirection = Vector3.Normalize(moveDirection);
-                Velocity.X = moveDirection.X * currentMoveSpeed;
-                Velocity.Z = moveDirection.Z * currentMoveSpeed;
-            }
-            else
-            {
-                Velocity.X = 0f;
-                Velocity.Z = 0f;
+                float accel = currentMoveSpeed * (1f - Friction);
+                Velocity.X += moveDirection.X * accel;
+                Velocity.Z += moveDirection.Z * accel;
+                float horizSq = Velocity.X * Velocity.X + Velocity.Z * Velocity.Z;
+                if (horizSq > currentMoveSpeed * currentMoveSpeed)
+                {
+                    float s = currentMoveSpeed / MathF.Sqrt(horizSq);
+                    Velocity.X *= s;
+                    Velocity.Z *= s;
+                }
             }
         }
         else
