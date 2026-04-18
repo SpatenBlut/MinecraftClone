@@ -78,10 +78,7 @@ public class Game1 : Game
         _graphics.PreferredBackBufferWidth  = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
         _graphics.SynchronizeWithVerticalRetrace = false;
-        _graphics.PreferMultiSampling = true;
         _graphics.ApplyChanges();
-
-        GraphicsDevice.PresentationParameters.MultiSampleCount = 8;
 
         IsMouseVisible  = false;
         IsFixedTimeStep = false;
