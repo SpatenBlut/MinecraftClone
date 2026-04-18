@@ -43,6 +43,12 @@ public class Game1 : Game
     private bool _inventoryOpen    = false;
     private bool _paused           = false;
 
+    // Mining
+    private Vector3? _miningTarget   = null;
+    private float    _miningProgress = 0f;
+    private float    _miningSwingTimer = 0f;
+    private const float MiningSwingInterval = 0.2f;
+
     private KeyboardState _lastKeyState;
     private MouseState    _lastMouseState;
 
@@ -246,14 +252,44 @@ public class Game1 : Game
         // ── Block interaction (only when playing freely) ──────────────────────
         if (!menuActive)
         {
-            if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
+            float frameDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+            if (mouseState.LeftButton == ButtonState.Pressed && _targetBlock.HasValue)
             {
-                _player.TriggerSwing();
-                if (_player.TryBreakBlock(_world, out _, out _))
+                var tb = _targetBlock.Value;
+                if (_miningTarget != tb)
                 {
+                    _miningTarget      = tb;
+                    _miningProgress    = 0f;
+                    _miningSwingTimer  = 0f;
+                    _player.TriggerSwing();
+                }
+
+                _miningProgress   += frameDt;
+                _miningSwingTimer -= frameDt;
+                if (_miningSwingTimer <= 0f)
+                {
+                    _player.TriggerSwing();
+                    _miningSwingTimer = MiningSwingInterval;
+                }
+
+                BlockType bt = _world.GetBlock((int)tb.X, (int)tb.Y, (int)tb.Z);
+                if (_miningProgress >= GetBreakTime(bt))
+                {
+                    _world.SetBlock((int)tb.X, (int)tb.Y, (int)tb.Z, BlockType.Air);
                     _blocksBroken++;
                     _needsMeshRebuild = true;
+                    _miningTarget     = null;
+                    _miningProgress   = 0f;
+                    _miningSwingTimer = 0f;
                 }
+            }
+            else
+            {
+                if (mouseState.LeftButton == ButtonState.Pressed
+                    && _lastMouseState.LeftButton == ButtonState.Released)
+                    _player.TriggerSwing(); // swing in air on fresh press
+                _miningTarget   = null;
+                _miningProgress = 0f;
             }
 
             if (mouseState.RightButton == ButtonState.Pressed && _lastMouseState.RightButton == ButtonState.Released)
@@ -373,4 +409,17 @@ public class Game1 : Game
             new Rectangle(sx - sunSize / 2, sy - sunSize / 2, sunSize, sunSize),
             Color.White);
     }
+
+    // Minecraft bare-hand break times: hardness * 1.5 seconds
+    private static float GetBreakTime(BlockType block) => block switch
+    {
+        BlockType.Leaves => 0.3f,
+        BlockType.Sand   => 0.75f,
+        BlockType.Dirt   => 0.75f,
+        BlockType.Grass  => 0.9f,
+        BlockType.Stone  => 2.25f,
+        BlockType.Wood   => 3.0f,
+        BlockType.Water  => float.MaxValue,
+        _                => 1.5f,
+    };
 }
