@@ -10,7 +10,7 @@ public class BlockOutline
     private readonly BasicEffect               _effect;
     private readonly List<VertexPositionColor> _verts = new(72);
 
-    private const float HalfWidth = 0.003f; // Linienbreite in Welteinheiten
+    private const float HalfWidth = 0.005f; // Linienbreite in Welteinheiten
 
     public BlockOutline(GraphicsDevice gd)
     {
