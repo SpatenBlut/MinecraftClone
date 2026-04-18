@@ -119,12 +119,14 @@ public class PlayerHeldItem
     // Oak leaves use a lighter top tint and the standard leaf green on sides.
     private static Color Tint(BlockType block, FaceDirection dir)
     {
-        if (block == BlockType.Grass && dir != FaceDirection.Bottom)
-            return new Color(0x77, 0xAB, 0x2F);
+        // Grass: only the top face gets the green biome tint.
+        // Side faces use the dirt+grass-overlay texture as-is (no tint), matching BlockIconRenderer.SideTint.
+        if (block == BlockType.Grass && dir == FaceDirection.Top)
+            return new Color(0x91, 0xBD, 0x59);
         if (block == BlockType.Leaves)
             return dir == FaceDirection.Top
-                ? new Color(0x91, 0xBD, 0x59)   // lighter top, matching BlockIconRenderer.TopTint
-                : new Color(0x77, 0xAB, 0x2F);  // standard leaf green on sides
+                ? new Color(0x91, 0xBD, 0x59)
+                : new Color(0x77, 0xAB, 0x2F);
         return Color.White;
     }
 

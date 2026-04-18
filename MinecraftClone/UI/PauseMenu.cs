@@ -9,8 +9,20 @@ namespace MinecraftClone.UI;
 
 public class PauseMenu
 {
-    private enum Screen     { Main, Settings, Stats, Hand }
-    private enum DragTarget { None, Sensitivity, Fov, HandX, HandY, HandZ, HandScale }
+    private enum Screen
+    {
+        Main, Settings, Stats,
+        Graphics, RenderQuality, Controls
+    }
+
+    private enum DragTarget
+    {
+        None,
+        Sensitivity,
+        Fov,
+        HandX, HandY, HandZ, HandScale,
+        RenderDist
+    }
 
     private Screen     _screen;
     private DragTarget _dragging = DragTarget.None;
@@ -22,7 +34,7 @@ public class PauseMenu
     private readonly Dictionary<int, Texture2D> _fillCornerCache    = new();
     private readonly Dictionary<int, Texture2D> _outlineCornerCache = new();
 
-    // ── Dark‑Steel palette ────────────────────────────────────────────────────
+    // ── Dark-Steel palette ────────────────────────────────────────────────────
     private static readonly Color ColOverlay = new Color(0,   0,   0,   185);
     private static readonly Color ColPanel   = new Color(26,  30,  38);
     private static readonly Color ColBtn     = new Color(42,  48,  60);
@@ -36,10 +48,9 @@ public class PauseMenu
     private static readonly Color ColAccent  = new Color(96,  176, 255);
     private static readonly Color ColSep     = new Color(55,  62,  78);
 
-    // ── Settings (Game1 reads and applies these) ──────────────────────────────
-    // Sensitivity is stored internally as Minecraft % (0-200) and converted on get/set.
-    // Minecraft formula: s = pct/200, f = (s*0.6+0.2)^3 * 8, rad/px = f*0.15*(π/180)
-    private float _sensPct = 50f;   // Minecraft default (0-100 range, 50 = internal 0.5)
+    // ── Sensitivity ───────────────────────────────────────────────────────────
+    // Stored as Minecraft % (0-200), default 16
+    private float _sensPct = 16f;
 
     public float MouseSensitivity
     {
@@ -60,14 +71,19 @@ public class PauseMenu
         return Math.Clamp((cbrt - 0.2f) / 0.6f * 100f, 0f, 100f);
     }
 
-    public float Fov    { get; set; } = 70f;
-    public bool  VSync  { get; set; } = false;
+    // ── Graphics settings ─────────────────────────────────────────────────────
+    public float Fov   { get; set; } = 90f;
+    public bool  VSync { get; set; } = false;
 
-    // ── Hand / held-item position (camera-space, matches MC 1.21 defaults) ────
+    // Hand / held-item position (camera-space, tuned defaults)
     public float HandOffsetX { get; set; } =  0.67f;
     public float HandOffsetY { get; set; } = -0.70f;
     public float HandOffsetZ { get; set; } = -1.28f;
     public float HandScale   { get; set; } =  0.33f;
+
+    // ── Render Quality settings (placeholder — not yet wired) ─────────────────
+    private float _renderDist    = 64f;
+    private bool  _smoothLighting = true;
 
     // ── Single-frame intent flags ─────────────────────────────────────────────
     public bool WantsResume   { get; private set; }
@@ -79,16 +95,14 @@ public class PauseMenu
     private float _playTimeSec;
 
     // ── Layout constants ──────────────────────────────────────────────────────
-    private const int PW   = 440;   // panel width
-    private const int BW   = 362;   // button width
-    private const int BH   = 54;    // button height
-    private const int BGap = 10;    // gap between buttons
-    private const int TPad = 28;    // top/bottom padding inside panel
-    private const int TH   = 54;    // title area height
-    private const int RowH = 62;    // settings row height
-    private const int SBW  = 40;    // small +/- button width
-    private const int SBH  = 36;    // small +/- button height
-    private const int StH  = 36;    // stats row height
+    private const int PW   = 440;
+    private const int BW   = 362;
+    private const int BH   = 54;
+    private const int BGap = 10;
+    private const int TPad = 28;
+    private const int TH   = 54;
+    private const int RowH = 62;
+    private const int StH  = 36;
 
     // ── Font scales ───────────────────────────────────────────────────────────
     private const float FsTitle = 1.56f;
@@ -96,6 +110,7 @@ public class PauseMenu
     private const float FsLabel = 0.84f;
     private const float FsValue = 0.80f;
     private const float FsStat  = 0.76f;
+    private const float FsSub   = 0.72f;
 
     public PauseMenu(GraphicsDevice gd, SpriteFont font)
     {
@@ -123,7 +138,6 @@ public class PauseMenu
         _playTimeSec  = playTimeSec;
         WantsResume = WantsMainMenu = WantsQuit = false;
 
-        // ESC: navigate back or resume
         if (ks.IsKeyDown(Keys.Escape) && lastKs.IsKeyUp(Keys.Escape))
         {
             if (_screen != Screen.Main) _screen = Screen.Main;
@@ -140,10 +154,12 @@ public class PauseMenu
 
         switch (_screen)
         {
-            case Screen.Main:     if (clicked) HandleMain(mx, my, sw, sh);                  break;
-            case Screen.Settings: HandleSettings(mx, my, sw, sh, clicked, held, released);  break;
-            case Screen.Stats:    if (clicked) HandleStats(mx, my, sw, sh);                  break;
-            case Screen.Hand:     HandleHand(mx, my, sw, sh, clicked, held, released);      break;
+            case Screen.Main:          if (clicked) HandleMain(mx, my, sw, sh);                         break;
+            case Screen.Settings:      if (clicked) HandleSettings(mx, my, sw, sh);                     break;
+            case Screen.Stats:         if (clicked) HandleStats(mx, my, sw, sh);                        break;
+            case Screen.Graphics:      HandleGraphics(mx, my, sw, sh, clicked, held, released);         break;
+            case Screen.RenderQuality: HandleRenderQuality(mx, my, sw, sh, clicked, held, released);    break;
+            case Screen.Controls:      HandleControls(mx, my, sw, sh, clicked, held, released);         break;
         }
     }
 
@@ -154,30 +170,31 @@ public class PauseMenu
         sb.Draw(_pixel, new Rectangle(0, 0, sw, sh), ColOverlay);
         switch (_screen)
         {
-            case Screen.Main:     DrawMain(sb, sw, sh, mx, my);          break;
-            case Screen.Settings: DrawSettings(sb, sw, sh, mx, my);      break;
-            case Screen.Stats:    DrawStats(sb, player, sw, sh, mx, my); break;
-            case Screen.Hand:     DrawHand(sb, sw, sh, mx, my);          break;
+            case Screen.Main:          DrawMain(sb, sw, sh, mx, my);                break;
+            case Screen.Settings:      DrawSettings(sb, sw, sh, mx, my);            break;
+            case Screen.Stats:         DrawStats(sb, player, sw, sh, mx, my);       break;
+            case Screen.Graphics:      DrawGraphics(sb, sw, sh, mx, my);            break;
+            case Screen.RenderQuality: DrawRenderQuality(sb, sw, sh, mx, my);       break;
+            case Screen.Controls:      DrawControls(sb, sw, sh, mx, my);            break;
         }
     }
 
     // ═══════════════════════════════ MAIN ════════════════════════════════════
 
-    private static readonly (string Label, bool Danger, bool Accent)[] MainItems =
+    private static readonly (string Label, bool Danger)[] MainItems =
     {
-        ("Main Menu",  false, false),
-        ("Settings",   false, false),
-        ("Statistics", false, false),
-        ("Hand",       false, false),
-        ("Leave",      true,  false),
+        ("Main Menu",  false),
+        ("Settings",   false),
+        ("Statistics", false),
+        ("Leave",      true),
     };
 
     private (int wx, int wy, int ph, Rectangle[] btns) MainLayout(int sw, int sh)
     {
-        int ph = TPad + MainItems.Length * BH + (MainItems.Length - 1) * BGap + TPad;
+        int ph = TPad + TH + MainItems.Length * BH + (MainItems.Length - 1) * BGap + TPad;
         int wx = (sw - PW) / 2, wy = (sh - ph) / 2;
         int bx = wx + (PW - BW) / 2;
-        int by = wy + TPad;
+        int by = wy + TPad + TH;
         var btns = new Rectangle[MainItems.Length];
         for (int i = 0; i < btns.Length; i++)
             btns[i] = new Rectangle(bx, by + i * (BH + BGap), BW, BH);
@@ -188,14 +205,14 @@ public class PauseMenu
     {
         var (wx, wy, ph, btns) = MainLayout(sw, sh);
         DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "PAUSED", wx, wy);
 
         for (int i = 0; i < MainItems.Length; i++)
         {
-            var (label, danger, accent) = MainItems[i];
-            bool hov  = btns[i].Contains(mx, my);
-            Color bg   = danger ? (hov ? ColBtnRedH : ColBtnRed) : hov ? ColBtnHov : ColBtn;
-            Color text = accent ? ColAccent : ColText;
-            DrawButton(sb, btns[i], label, bg, text);
+            var (label, danger) = MainItems[i];
+            bool hov = btns[i].Contains(mx, my);
+            Color bg = danger ? (hov ? ColBtnRedH : ColBtnRed) : hov ? ColBtnHov : ColBtn;
+            DrawButton(sb, btns[i], label, bg, ColText);
         }
     }
 
@@ -205,173 +222,141 @@ public class PauseMenu
         if      (btns[0].Contains(mx, my)) WantsMainMenu = true;
         else if (btns[1].Contains(mx, my)) _screen       = Screen.Settings;
         else if (btns[2].Contains(mx, my)) _screen       = Screen.Stats;
-        else if (btns[3].Contains(mx, my)) _screen       = Screen.Hand;
-        else if (btns[4].Contains(mx, my)) WantsQuit     = true;
+        else if (btns[3].Contains(mx, my)) WantsQuit     = true;
     }
 
-    // ══════════════════════════ SETTINGS ══════════════════════════════════════
+    // ══════════════════════════ SETTINGS (category list) ══════════════════════
 
-    private (int wx, int wy, int ph) SettingsLayout(int sw, int sh)
+    private static readonly string[] SettingsCategories = { "Graphics", "Render Quality", "Controls" };
+
+    private (int wx, int wy, int ph, Rectangle[] btns, Rectangle back) SettingsLayout(int sw, int sh)
     {
-        int ph = TPad + TH + 2 * RowH + 20 + BH + BGap + BH + TPad;
-        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+        int n  = SettingsCategories.Length;
+        int ph = TPad + TH + n * BH + (n - 1) * BGap + 20 + BH + TPad;
+        int wx = (sw - PW) / 2, wy = (sh - ph) / 2;
+        int bx = wx + (PW - BW) / 2;
+        int by = wy + TPad + TH;
+        var btns = new Rectangle[n];
+        for (int i = 0; i < n; i++)
+            btns[i] = new Rectangle(bx, by + i * (BH + BGap), BW, BH);
+        var back = new Rectangle(bx, by + n * BH + (n - 1) * BGap + 20, BW, BH);
+        return (wx, wy, ph, btns, back);
     }
-
-    // Track rectangle for a slider row starting at (wx, ry)
-    private static Rectangle SliderTrack(int wx, int ry) =>
-        new Rectangle(wx + 22, ry + 36, PW - 44, 6);
 
     private void DrawSettings(SpriteBatch sb, int sw, int sh, int mx, int my)
     {
-        var (wx, wy, ph) = SettingsLayout(sw, sh);
+        var (wx, wy, ph, btns, back) = SettingsLayout(sw, sh);
         DrawPanel(sb, wx, wy, PW, ph);
         DrawTitle(sb, "SETTINGS", wx, wy);
 
+        for (int i = 0; i < SettingsCategories.Length; i++)
+            DrawButton(sb, btns[i], SettingsCategories[i],
+                btns[i].Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void HandleSettings(int mx, int my, int sw, int sh)
+    {
+        var (_, _, _, btns, back) = SettingsLayout(sw, sh);
+        if      (btns[0].Contains(mx, my)) _screen = Screen.Graphics;
+        else if (btns[1].Contains(mx, my)) _screen = Screen.RenderQuality;
+        else if (btns[2].Contains(mx, my)) _screen = Screen.Controls;
+        else if (back.Contains(mx, my))    _screen = Screen.Main;
+    }
+
+    // ══════════════════════════ GRAPHICS ══════════════════════════════════════
+    // FOV, VSync, + Hand / held-item position sliders
+
+    private (int wx, int wy, int ph) GraphicsLayout(int sw, int sh)
+    {
+        // 1 slider (FOV) + toggle row + sub-heading + 4 sliders (hand) + gap + Back
+        int ph = TPad + TH
+               + RowH              // FOV
+               + (BH + BGap)       // VSync
+               + 32                // sub-heading "Hand Item"
+               + 4 * RowH          // hand X/Y/Scale/Z
+               + 20 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+    }
+
+    private void DrawGraphics(SpriteBatch sb, int sw, int sh, int mx, int my)
+    {
+        var (wx, wy, ph) = GraphicsLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "GRAPHICS", wx, wy);
+
+        int bx = wx + (PW - BW) / 2;
         int ry = wy + TPad + TH;
 
-        DrawSlider(sb, wx, ry, "Mouse Sensitivity", $"{_sensPct:F0}%", _sensPct / 100f);
+        DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 30f) / 110f);
         ry += RowH;
 
-        DrawSlider(sb, wx, ry, "Field of View", $"{Fov:F0}", (Fov - 30f) / 80f);
-        ry += RowH + 20;
-
-        int bx     = wx + (PW - BW) / 2;
-        var vsync  = new Rectangle(bx, ry, BW, BH);
+        var vsync = new Rectangle(bx, ry, BW, BH);
         Color vsyncBg = VSync ? ColAccent * 0.6f : ColBtn;
         DrawButton(sb, vsync, VSync ? "VSync: ON" : "VSync: OFF",
             vsync.Contains(mx, my) ? (VSync ? ColAccent * 0.8f : ColBtnHov) : vsyncBg, ColText);
         ry += BH + BGap;
 
-        var back = new Rectangle(bx, ry, BW, BH);
-        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
-    }
+        DrawSubHeading(sb, wx, ry, "HAND ITEM");
+        ry += 32;
 
-    private void HandleSettings(int mx, int my, int sw, int sh,
-                                bool clicked, bool held, bool released)
-    {
-        var (wx, wy, _) = SettingsLayout(sw, sh);
-        int ry0 = wy + TPad + TH;
-        int ry1 = ry0 + RowH;
-
-        var sensTrack = SliderTrack(wx, ry0);
-        var fovTrack  = SliderTrack(wx, ry1);
-
-        // Expand hit area vertically so the full row is draggable
-        var sensHit = new Rectangle(sensTrack.X, ry0 + 4, sensTrack.Width, RowH - 8);
-        var fovHit  = new Rectangle(fovTrack.X,  ry1 + 4, fovTrack.Width,  RowH - 8);
-
-        if (clicked)
-        {
-            if      (sensHit.Contains(mx, my)) _dragging = DragTarget.Sensitivity;
-            else if (fovHit .Contains(mx, my)) _dragging = DragTarget.Fov;
-        }
-
-        if (released)
-            _dragging = DragTarget.None;
-
-        if (held)
-        {
-            if (_dragging == DragTarget.Sensitivity)
-            {
-                float t = Math.Clamp((mx - sensTrack.X) / (float)sensTrack.Width, 0f, 1f);
-                _sensPct = MathF.Round(t * 100f);
-            }
-            else if (_dragging == DragTarget.Fov)
-            {
-                float t = Math.Clamp((mx - fovTrack.X) / (float)fovTrack.Width, 0f, 1f);
-                Fov = MathF.Round(30f + t * 80f);
-            }
-        }
-
-        // VSync + Back buttons — click only
-        if (clicked)
-        {
-            int bx     = wx + (PW - BW) / 2;
-            int vsyncY = ry1 + RowH + 20;
-            int backY  = vsyncY + BH + BGap;
-            if (new Rectangle(bx, vsyncY, BW, BH).Contains(mx, my))
-                VSync = !VSync;
-            else if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
-            {
-                _dragging = DragTarget.None;
-                _screen   = Screen.Main;
-            }
-        }
-    }
-
-    // ════════════════════════════ HAND ════════════════════════════════════════
-
-    private (int wx, int wy, int ph) HandLayout(int sw, int sh)
-    {
-        int ph = TPad + TH + 4 * RowH + 20 + BH + TPad;
-        return ((sw - PW) / 2, (sh - ph) / 2, ph);
-    }
-
-    private void DrawHand(SpriteBatch sb, int sw, int sh, int mx, int my)
-    {
-        var (wx, wy, ph) = HandLayout(sw, sh);
-        DrawPanel(sb, wx, wy, PW, ph);
-        DrawTitle(sb, "HAND", wx, wy);
-
-        int ry = wy + TPad + TH;
-
-        // X: -2.0 .. +2.0,  t = (v+2)/4
-        DrawSlider(sb, wx, ry, "Left / Right", $"{HandOffsetX:F2}",
-            (HandOffsetX + 2f) / 4f);
+        DrawSlider(sb, wx, ry, "Left / Right",   $"{HandOffsetX:F2}", (HandOffsetX + 2f) / 4f);
         ry += RowH;
-
-        // Y: -2.0 .. +2.0
-        DrawSlider(sb, wx, ry, "Up / Down", $"{HandOffsetY:F2}",
-            (HandOffsetY + 2f) / 4f);
+        DrawSlider(sb, wx, ry, "Up / Down",       $"{HandOffsetY:F2}", (HandOffsetY + 2f) / 4f);
         ry += RowH;
-
-        // Scale: 0.05 .. 1.00,  t = (v-0.05)/0.95
-        DrawSlider(sb, wx, ry, "Scale", $"{HandScale:F2}x",
-            (HandScale - 0.05f) / 0.95f);
+        DrawSlider(sb, wx, ry, "Scale",           $"{HandScale:F2}x",  (HandScale - 0.05f) / 0.95f);
         ry += RowH;
-
-        // Z: -2.0 .. +0.5,  t = (v+2)/2.5
-        DrawSlider(sb, wx, ry, "Forward / Back", $"{HandOffsetZ:F2}",
-            (HandOffsetZ + 2f) / 2.5f);
+        DrawSlider(sb, wx, ry, "Forward / Back",  $"{HandOffsetZ:F2}", (HandOffsetZ + 2f) / 2.5f);
         ry += RowH + 20;
 
-        int bx   = wx + (PW - BW) / 2;
         var back = new Rectangle(bx, ry, BW, BH);
         DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
     }
 
-    private void HandleHand(int mx, int my, int sw, int sh,
-                            bool clicked, bool held, bool released)
+    private void HandleGraphics(int mx, int my, int sw, int sh,
+                                bool clicked, bool held, bool released)
     {
-        var (wx, wy, _) = HandLayout(sw, sh);
-        int ry0 = wy + TPad + TH;
-        int ry1 = ry0 + RowH;
-        int ry2 = ry1 + RowH;
-        int ry3 = ry2 + RowH;
+        var (wx, wy, _) = GraphicsLayout(sw, sh);
+        int bx  = wx + (PW - BW) / 2;
+        int ry0 = wy + TPad + TH;                 // FOV slider
+        int ryV = ry0 + RowH;                     // VSync button
+        int ry1 = ryV + BH + BGap + 32;           // Hand X
+        int ry2 = ry1 + RowH;                     // Hand Y
+        int ry3 = ry2 + RowH;                     // Hand Scale
+        int ry4 = ry3 + RowH;                     // Hand Z
 
-        var xTrack = SliderTrack(wx, ry0);
-        var yTrack = SliderTrack(wx, ry1);
-        var sTrack = SliderTrack(wx, ry2);
-        var zTrack = SliderTrack(wx, ry3);
+        var fovTrack = SliderTrack(wx, ry0);
+        var xTrack   = SliderTrack(wx, ry1);
+        var yTrack   = SliderTrack(wx, ry2);
+        var sTrack   = SliderTrack(wx, ry3);
+        var zTrack   = SliderTrack(wx, ry4);
 
-        var xHit = new Rectangle(xTrack.X, ry0 + 4, xTrack.Width, RowH - 8);
-        var yHit = new Rectangle(yTrack.X, ry1 + 4, yTrack.Width, RowH - 8);
-        var sHit = new Rectangle(sTrack.X, ry2 + 4, sTrack.Width, RowH - 8);
-        var zHit = new Rectangle(zTrack.X, ry3 + 4, zTrack.Width, RowH - 8);
+        var fovHit = new Rectangle(fovTrack.X, ry0 + 4, fovTrack.Width, RowH - 8);
+        var xHit   = new Rectangle(xTrack.X,   ry1 + 4, xTrack.Width,   RowH - 8);
+        var yHit   = new Rectangle(yTrack.X,   ry2 + 4, yTrack.Width,   RowH - 8);
+        var sHit   = new Rectangle(sTrack.X,   ry3 + 4, sTrack.Width,   RowH - 8);
+        var zHit   = new Rectangle(zTrack.X,   ry4 + 4, zTrack.Width,   RowH - 8);
 
         if (clicked)
         {
-            if      (xHit.Contains(mx, my)) _dragging = DragTarget.HandX;
-            else if (yHit.Contains(mx, my)) _dragging = DragTarget.HandY;
-            else if (sHit.Contains(mx, my)) _dragging = DragTarget.HandScale;
-            else if (zHit.Contains(mx, my)) _dragging = DragTarget.HandZ;
+            if      (fovHit.Contains(mx, my))  _dragging = DragTarget.Fov;
+            else if (xHit.Contains(mx, my))    _dragging = DragTarget.HandX;
+            else if (yHit.Contains(mx, my))    _dragging = DragTarget.HandY;
+            else if (sHit.Contains(mx, my))    _dragging = DragTarget.HandScale;
+            else if (zHit.Contains(mx, my))    _dragging = DragTarget.HandZ;
         }
 
         if (released) _dragging = DragTarget.None;
 
         if (held)
         {
-            if (_dragging == DragTarget.HandX)
+            if (_dragging == DragTarget.Fov)
+            {
+                float t = Math.Clamp((mx - fovTrack.X) / (float)fovTrack.Width, 0f, 1f);
+                Fov = MathF.Round(30f + t * 110f);
+            }
+            else if (_dragging == DragTarget.HandX)
             {
                 float t = Math.Clamp((mx - xTrack.X) / (float)xTrack.Width, 0f, 1f);
                 HandOffsetX = MathF.Round((-2f + t * 4f) * 100f) / 100f;
@@ -395,12 +380,135 @@ public class PauseMenu
 
         if (clicked)
         {
-            int bx    = wx + (PW - BW) / 2;
-            int backY = ry3 + RowH + 20;
+            var vsync = new Rectangle(bx, ryV, BW, BH);
+            if (vsync.Contains(mx, my)) VSync = !VSync;
+
+            int backY = ry4 + RowH + 20;
             if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
             {
                 _dragging = DragTarget.None;
-                _screen   = Screen.Main;
+                _screen   = Screen.Settings;
+            }
+        }
+    }
+
+    // ══════════════════════ RENDER QUALITY (placeholder) ══════════════════════
+
+    private (int wx, int wy, int ph) RenderQualityLayout(int sw, int sh)
+    {
+        int ph = TPad + TH + RowH + (BH + BGap) + 20 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+    }
+
+    private void DrawRenderQuality(SpriteBatch sb, int sw, int sh, int mx, int my)
+    {
+        var (wx, wy, ph) = RenderQualityLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "RENDER QUALITY", wx, wy);
+
+        int bx = wx + (PW - BW) / 2;
+        int ry = wy + TPad + TH;
+
+        // Placeholder: Render Distance (not yet wired to game logic)
+        float rdT = (_renderDist - 16f) / (256f - 16f);
+        DrawSlider(sb, wx, ry, "Render Distance", $"{(int)_renderDist} chunks", rdT);
+        ry += RowH;
+
+        // Placeholder: Smooth Lighting toggle
+        var smoothBtn = new Rectangle(bx, ry, BW, BH);
+        Color sBg = _smoothLighting ? ColAccent * 0.6f : ColBtn;
+        DrawButton(sb, smoothBtn, _smoothLighting ? "Smooth Lighting: ON" : "Smooth Lighting: OFF",
+            smoothBtn.Contains(mx, my) ? (_smoothLighting ? ColAccent * 0.8f : ColBtnHov) : sBg, ColText);
+        ry += BH + BGap + 20;
+
+        var back = new Rectangle(bx, ry, BW, BH);
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void HandleRenderQuality(int mx, int my, int sw, int sh,
+                                     bool clicked, bool held, bool released)
+    {
+        var (wx, wy, _) = RenderQualityLayout(sw, sh);
+        int bx  = wx + (PW - BW) / 2;
+        int ry0 = wy + TPad + TH;
+        int ryS = ry0 + RowH;
+
+        var rdTrack = SliderTrack(wx, ry0);
+        var rdHit   = new Rectangle(rdTrack.X, ry0 + 4, rdTrack.Width, RowH - 8);
+
+        if (clicked && rdHit.Contains(mx, my))  _dragging = DragTarget.RenderDist;
+        if (released)                            _dragging = DragTarget.None;
+
+        if (held && _dragging == DragTarget.RenderDist)
+        {
+            float t = Math.Clamp((mx - rdTrack.X) / (float)rdTrack.Width, 0f, 1f);
+            _renderDist = MathF.Round(16f + t * (256f - 16f));
+        }
+
+        if (clicked)
+        {
+            var smoothBtn = new Rectangle(bx, ryS, BW, BH);
+            if (smoothBtn.Contains(mx, my)) _smoothLighting = !_smoothLighting;
+
+            int backY = ryS + BH + BGap + 20;
+            if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
+            {
+                _dragging = DragTarget.None;
+                _screen   = Screen.Settings;
+            }
+        }
+    }
+
+    // ══════════════════════════ CONTROLS ══════════════════════════════════════
+
+    private (int wx, int wy, int ph) ControlsLayout(int sw, int sh)
+    {
+        int ph = TPad + TH + RowH + 20 + BH + TPad;
+        return ((sw - PW) / 2, (sh - ph) / 2, ph);
+    }
+
+    private void DrawControls(SpriteBatch sb, int sw, int sh, int mx, int my)
+    {
+        var (wx, wy, ph) = ControlsLayout(sw, sh);
+        DrawPanel(sb, wx, wy, PW, ph);
+        DrawTitle(sb, "CONTROLS", wx, wy);
+
+        int bx = wx + (PW - BW) / 2;
+        int ry = wy + TPad + TH;
+
+        DrawSlider(sb, wx, ry, "Mouse Sensitivity", $"{_sensPct:F0}%", _sensPct / 100f);
+        ry += RowH + 20;
+
+        var back = new Rectangle(bx, ry, BW, BH);
+        DrawButton(sb, back, "Back", back.Contains(mx, my) ? ColBtnHov : ColBtn, ColText);
+    }
+
+    private void HandleControls(int mx, int my, int sw, int sh,
+                                bool clicked, bool held, bool released)
+    {
+        var (wx, wy, _) = ControlsLayout(sw, sh);
+        int bx  = wx + (PW - BW) / 2;
+        int ry0 = wy + TPad + TH;
+
+        var sensTrack = SliderTrack(wx, ry0);
+        var sensHit   = new Rectangle(sensTrack.X, ry0 + 4, sensTrack.Width, RowH - 8);
+
+        if (clicked && sensHit.Contains(mx, my)) _dragging = DragTarget.Sensitivity;
+        if (released)                             _dragging = DragTarget.None;
+
+        if (held && _dragging == DragTarget.Sensitivity)
+        {
+            float t = Math.Clamp((mx - sensTrack.X) / (float)sensTrack.Width, 0f, 1f);
+            _sensPct = MathF.Round(t * 100f);
+        }
+
+        if (clicked)
+        {
+            int backY = ry0 + RowH + 20;
+            if (new Rectangle(bx, backY, BW, BH).Contains(mx, my))
+            {
+                _dragging = DragTarget.None;
+                _screen   = Screen.Settings;
             }
         }
     }
@@ -533,52 +641,51 @@ public class PauseMenu
     private void DrawButton(SpriteBatch sb, Rectangle r, string label, Color bg, Color textCol)
     {
         FillRounded(sb, r.X, r.Y, r.Width, r.Height, bg, 6);
-
         var sz = _font.MeasureString(label) * FsBtn;
         var p  = new Vector2(r.X + (r.Width  - sz.X) / 2f,
                              r.Y + (r.Height - sz.Y) / 2f);
-        sb.DrawString(_font, label, p + new Vector2(1, 1), Color.Black * 0.4f,
-            0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
-        sb.DrawString(_font, label, p, textCol,
-            0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
+        sb.DrawString(_font, label, p + new Vector2(1, 1), Color.Black * 0.4f, 0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
+        sb.DrawString(_font, label, p,                     textCol,             0, Vector2.Zero, FsBtn, SpriteEffects.None, 0);
     }
 
     private void DrawTitle(SpriteBatch sb, string title, int wx, int wy)
     {
         var sz  = _font.MeasureString(title) * FsTitle;
         var pos = new Vector2(wx + (PW - sz.X) / 2f, wy + TPad);
-        sb.DrawString(_font, title, pos + new Vector2(2, 2), Color.Black * 0.4f,
-            0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
-        sb.DrawString(_font, title, pos, ColText,
-            0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
+        sb.DrawString(_font, title, pos + new Vector2(2, 2), Color.Black * 0.4f, 0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
+        sb.DrawString(_font, title, pos,                     ColText,             0, Vector2.Zero, FsTitle, SpriteEffects.None, 0);
         int sepY = (int)(pos.Y + sz.Y + 8);
         sb.Draw(_pixel, new Rectangle(wx + 18, sepY, PW - 36, 1), ColSep);
     }
+
+    private void DrawSubHeading(SpriteBatch sb, int wx, int ry, string text)
+    {
+        sb.Draw(_pixel, new Rectangle(wx + 16, ry + 14, PW - 32, 1), ColSep);
+        var sz  = _font.MeasureString(text) * FsSub;
+        var pos = new Vector2(wx + (PW - sz.X) / 2f, ry + 4);
+        sb.DrawString(_font, text, pos, ColMuted, 0, Vector2.Zero, FsSub, SpriteEffects.None, 0);
+    }
+
+    private static Rectangle SliderTrack(int wx, int ry) =>
+        new Rectangle(wx + 22, ry + 36, PW - 44, 6);
 
     private void DrawSlider(SpriteBatch sb, int wx, int ry, string label, string value, float t)
     {
         sb.Draw(_pixel, new Rectangle(wx + 16, ry, PW - 32, 1), ColSep * 0.5f);
 
-        // Label (top-left)
         sb.DrawString(_font, label,
-            new Vector2(wx + 22, ry + 10),
-            ColText, 0, Vector2.Zero, FsLabel, SpriteEffects.None, 0);
+            new Vector2(wx + 22, ry + 10), ColText, 0, Vector2.Zero, FsLabel, SpriteEffects.None, 0);
 
-        // Value (top-right)
         var vsz = _font.MeasureString(value) * FsValue;
         sb.DrawString(_font, value,
-            new Vector2(wx + PW - 22 - vsz.X, ry + 10),
-            ColMuted, 0, Vector2.Zero, FsValue, SpriteEffects.None, 0);
+            new Vector2(wx + PW - 22 - vsz.X, ry + 10), ColMuted, 0, Vector2.Zero, FsValue, SpriteEffects.None, 0);
 
-        // Track background
         var track = SliderTrack(wx, ry);
         FillRounded(sb, track.X, track.Y, track.Width, track.Height, ColDark, 3);
 
-        // Filled portion
         int fillW = Math.Max((int)(track.Width * t), 6);
         FillRounded(sb, track.X, track.Y, fillW, track.Height, ColAccent * 0.85f, 3);
 
-        // Handle knob
         const int HR = 7;
         int hx = track.X + (int)(track.Width * t);
         int hy = track.Y + track.Height / 2;
@@ -588,14 +695,10 @@ public class PauseMenu
     private void DrawStatRow(SpriteBatch sb, int wx, int ry, string label, string value)
     {
         sb.Draw(_pixel, new Rectangle(wx + 16, ry, PW - 32, 1), ColSep * 0.4f);
-
         sb.DrawString(_font, label,
-            new Vector2(wx + 22, ry + 6),
-            ColMuted, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
-
+            new Vector2(wx + 22, ry + 6), ColMuted, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
         var vsz = _font.MeasureString(value) * FsStat;
         sb.DrawString(_font, value,
-            new Vector2(wx + PW - 22 - vsz.X, ry + 6),
-            ColText, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
+            new Vector2(wx + PW - 22 - vsz.X, ry + 6), ColText, 0, Vector2.Zero, FsStat, SpriteEffects.None, 0);
     }
 }
