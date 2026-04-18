@@ -25,6 +25,7 @@ public class Game1 : Game
 
     private BlockEffect    _basicEffect;
     private BlockOutline   _blockOutline;
+    private BlockMiningBar _blockMiningBar;
     private PlayerArm      _playerArm;
     private PlayerHeldItem _playerHeldItem;
     private PlayerModel    _playerModel;
@@ -32,6 +33,7 @@ public class Game1 : Game
     private SpriteFont   _font;
 
     private Vector3? _targetBlock;
+    private Vector3  _targetFaceNormal;
 
     // Sky
     private Texture2D _skyGradient;
@@ -76,7 +78,10 @@ public class Game1 : Game
         _graphics.PreferredBackBufferWidth  = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
         _graphics.PreferredBackBufferHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
         _graphics.SynchronizeWithVerticalRetrace = false;
+        _graphics.PreferMultiSampling = true;
         _graphics.ApplyChanges();
+
+        GraphicsDevice.PresentationParameters.MultiSampleCount = 8;
 
         IsMouseVisible  = false;
         IsFixedTimeStep = false;
@@ -114,7 +119,8 @@ public class Game1 : Game
         _font        = Content.Load<SpriteFont>("Font");
         _hud          = new HUD(GraphicsDevice, _font, _blockAtlas);
         _pauseMenu    = new PauseMenu(GraphicsDevice, _font);
-        _blockOutline = new BlockOutline(GraphicsDevice);
+        _blockOutline   = new BlockOutline(GraphicsDevice);
+        _blockMiningBar = new BlockMiningBar(GraphicsDevice);
         _playerArm      = new PlayerArm(GraphicsDevice);
         _playerHeldItem = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
         _playerModel    = new PlayerModel(GraphicsDevice);
@@ -270,8 +276,11 @@ public class Game1 : Game
 
         // ── Zielblock bestimmen (jeden Frame) ────────────────────────────────
         if (!menuActive && Raycast.CastRay(_world, _player.Camera.Position,
-                _player.Camera.Forward, 5f, out Vector3 hb, out _))
-            _targetBlock = hb;
+                _player.Camera.Forward, 5f, out Vector3 hb, out Vector3 ab))
+        {
+            _targetBlock      = hb;
+            _targetFaceNormal = ab - hb; // unit-length axis vector pointing toward camera
+        }
         else
             _targetBlock = null;
 
@@ -401,6 +410,19 @@ public class Game1 : Game
         if (_targetBlock.HasValue)
             _blockOutline.Draw(_targetBlock.Value, _player.Camera.Position,
                 _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
+
+        // Mining progress bar
+        if (_miningTarget.HasValue)
+        {
+            BlockType mbt      = _world.GetBlock((int)_miningTarget.Value.X,
+                                                 (int)_miningTarget.Value.Y,
+                                                 (int)_miningTarget.Value.Z);
+            float breakTime    = GetBreakTime(mbt, _inventory.HeldTool);
+            float miningAlpha  = breakTime >= float.MaxValue ? 0f
+                               : MathHelper.Clamp(_miningProgress / breakTime, 0f, 1f);
+            _blockMiningBar.Draw(_miningTarget.Value, _targetFaceNormal, miningAlpha,
+                _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
+        }
 
         // Player model (third person only)
         if (_player.Camera.Mode != CameraMode.FirstPerson)
