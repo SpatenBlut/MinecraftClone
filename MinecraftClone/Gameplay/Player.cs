@@ -61,7 +61,7 @@ public class Player
     // Arm-Swing-Animation
     public float SwingProgress { get; private set; }
     private float _swingTimer = 0f;
-    private const float SwingDuration = 0.3f;
+    private const float SwingDuration = 0.2f;
 
     // Smooth Sneak-Übergang (nicht instant wie in Minecraft)
     private float _smoothEyeHeight = NormalEyeHeight;

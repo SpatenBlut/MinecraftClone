@@ -130,11 +130,6 @@ public class PlayerHeldItem
         return Color.White;
     }
 
-    // MC 1.21 ItemInHandRenderer.renderItemInFirstPerson — 3D block item, right hand, no animation.
-    // MC PoseStack order (→ reversed for MonoGame):
-    //   step 1 (outermost): translate(x, y, z)          — camera-space placement
-    //   step 2: rotateY(45°)                             — block/block.json firstperson_righthand rotation
-    //   step 3 (innermost): scale(scale, scale, scale)   — block/block.json firstperson_righthand scale
     private static Matrix BuildWorldMatrix(float x, float y, float z, float scale) =>
           Matrix.CreateScale(scale)
         * Matrix.CreateRotationY(MathHelper.ToRadians(45f))

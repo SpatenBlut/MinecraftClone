@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MinecraftClone.Core;
@@ -56,13 +57,16 @@ public class PlayerArm
     // MC 1.21 getFov(..., applyEffects=false): fixed base FOV, never sprint-modified.
     private const float ArmFov = 70f;
 
-    public void Draw(Camera camera)
+    public void Draw(Camera camera, float swingProgress)
     {
+        float f  = MathF.Sin(swingProgress * swingProgress * MathF.PI);
+        float f1 = MathF.Sin(MathF.Sqrt(swingProgress) * MathF.PI);
+
         float aspect = _gd.Viewport.AspectRatio;
         Matrix projection = Matrix.CreatePerspectiveFieldOfView(
             MathHelper.ToRadians(ArmFov), aspect, 0.05f, 10f);
 
-        _effect.World      = BuildRightArmWorldMatrix();
+        _effect.World      = BuildRightArmWorldMatrix(f, f1);
         _effect.View       = Matrix.Identity;
         _effect.Projection = projection;
 
@@ -87,20 +91,20 @@ public class PlayerArm
     // Faithfully mirrors ItemInHandRenderer.renderPlayerArm (right hand, sign=+1).
     // MC PoseStack is column-vector post-multiply (first op = outermost).
     // MonoGame is row-vector, so the multiply order is reversed relative to MC's call order.
-    private static Matrix BuildRightArmWorldMatrix()
+    private static Matrix BuildRightArmWorldMatrix(float f, float f1)
     {
         const float Sign = 1f; // right hand
 
         return
-              Matrix.CreateTranslation(-5f / 16f, 2f / 16f, 0f)                  // step 10 — ModelPart.translateAndRotate: PartPose.offset(-5, 2, 0)
-            * Matrix.CreateTranslation(Sign * 5.6f, 0f, 0f)                      // step  9
-            * Matrix.CreateRotationY(MathHelper.ToRadians(Sign * -135f))         // step  8
-            * Matrix.CreateRotationX(MathHelper.ToRadians(200f))                 // step  7
-            * Matrix.CreateRotationZ(MathHelper.ToRadians(Sign * 120f))          // step  6
-            * Matrix.CreateTranslation(Sign * -1f, 3.6f, 3.5f)                   // step  5
-            * Matrix.CreateRotationZ(0f)                                         // step  4 — swing-anim hook (sign * swingMagnitude * -20°)
-            * Matrix.CreateRotationY(0f)                                         // step  3 — bob-anim hook   (sign * bobMagnitude   * +70°)
-            * Matrix.CreateRotationY(MathHelper.ToRadians(Sign * 45f))           // step  2
-            * Matrix.CreateTranslation(Sign * 0.64f, -0.6f, -0.72f);             // step  1 — ItemInHandRenderer camera-space offset (outermost)
+              Matrix.CreateTranslation(-5f / 16f, 2f / 16f, 0f)                       // step 10 — ModelPart.translateAndRotate: PartPose.offset(-5, 2, 0)
+            * Matrix.CreateTranslation(Sign * 5.6f, 0f, 0f)                           // step  9
+            * Matrix.CreateRotationY(MathHelper.ToRadians(Sign * -135f))              // step  8
+            * Matrix.CreateRotationX(MathHelper.ToRadians(200f))                      // step  7
+            * Matrix.CreateRotationZ(MathHelper.ToRadians(Sign * 120f))               // step  6
+            * Matrix.CreateTranslation(Sign * -1f, 3.6f, 3.5f)                        // step  5
+            * Matrix.CreateRotationZ(MathHelper.ToRadians(Sign * f1 * -20f))          // step  4 — swing-anim hook
+            * Matrix.CreateRotationY(MathHelper.ToRadians(Sign * f  *  70f))          // step  3 — bob-anim hook
+            * Matrix.CreateRotationY(MathHelper.ToRadians(Sign * 45f))                // step  2
+            * Matrix.CreateTranslation(Sign * 0.64f, -0.6f, -0.72f);                  // step  1 — ItemInHandRenderer camera-space offset (outermost)
     }
 }

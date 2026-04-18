@@ -248,9 +248,9 @@ public class Game1 : Game
         {
             if (mouseState.LeftButton == ButtonState.Pressed && _lastMouseState.LeftButton == ButtonState.Released)
             {
+                _player.TriggerSwing();
                 if (_player.TryBreakBlock(_world, out _, out _))
                 {
-                    _player.TriggerSwing();
                     _blocksBroken++;
                     _needsMeshRebuild = true;
                 }
@@ -330,7 +330,7 @@ public class Game1 : Game
         GraphicsDevice.Clear(ClearOptions.DepthBuffer, Color.Black, 1f, 0);
         var heldBlock = _inventory.SelectedBlock;
         if (heldBlock == BlockType.Air)
-            _playerArm.Draw(_player.Camera);
+            _playerArm.Draw(_player.Camera, _player.SwingProgress);
         else
             _playerHeldItem.Draw(_player.Camera, heldBlock,
                 _pauseMenu.HandOffsetX, _pauseMenu.HandOffsetY,
