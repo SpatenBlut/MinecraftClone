@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -39,11 +40,14 @@ public class Game1 : Game
         new(new Vector3( 1, -1, 0), new Vector2(1, 1)),
         new(new Vector3(-1, -1, 0), new Vector2(0, 1)),
     };
-    private PlayerArm      _playerArm;
-    private PlayerHeldItem _playerHeldItem;
-    private PlayerModel    _playerModel;
-    private Texture2D      _blockAtlas;
-    private SpriteFont   _font;
+    private PlayerArm           _playerArm;
+    private PlayerHeldItem      _playerHeldItem;
+    private PlayerModel         _playerModel;
+    private DroppedItemRenderer _droppedItemRenderer;
+    private Texture2D           _blockAtlas;
+    private SpriteFont          _font;
+
+    private readonly List<DroppedItem> _droppedItems = new();
 
     private Vector3? _targetBlock;
     private Vector3  _targetFaceNormal;
@@ -137,9 +141,10 @@ public class Game1 : Game
             GraphicsDevice.PresentationParameters.BackBufferWidth,
             GraphicsDevice.PresentationParameters.BackBufferHeight,
             false, SurfaceFormat.Color, DepthFormat.Depth24Stencil8);
-        _playerArm      = new PlayerArm(GraphicsDevice);
-        _playerHeldItem = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
-        _playerModel    = new PlayerModel(GraphicsDevice);
+        _playerArm           = new PlayerArm(GraphicsDevice);
+        _playerHeldItem      = new PlayerHeldItem(GraphicsDevice, _blockAtlas);
+        _playerModel         = new PlayerModel(GraphicsDevice);
+        _droppedItemRenderer = new DroppedItemRenderer(GraphicsDevice, _blockAtlas);
 
         _skyGradient = new Texture2D(GraphicsDevice, 1, 2);
         _skyGradient.SetData(new[] { SkyZenith, SkyHorizon });
@@ -330,7 +335,8 @@ public class Game1 : Game
                     ToolCategory req = RequiredTool(bt);
                     bool correctTool = req == ToolCategory.None || _inventory.HeldTool.Category() == req;
                     if (correctTool && bt != BlockType.Leaves)
-                        _inventory.AddToInventory(bt, 1);
+                        _droppedItems.Add(new DroppedItem(bt,
+                            new Vector3(tb.X + 0.5f, tb.Y + 0.375f, tb.Z + 0.5f)));
                     _blocksBroken++;
                     _needsMeshRebuild = true;
                     _miningTarget     = null;
@@ -360,6 +366,14 @@ public class Game1 : Game
         }
 
         _lastMouseState = mouseState;
+
+        // Update dropped items (always, even when menu is open)
+        float itemDt = (float)gameTime.ElapsedGameTime.TotalSeconds;
+        for (int i = _droppedItems.Count - 1; i >= 0; i--)
+        {
+            if (_droppedItems[i].Update(itemDt, _world, _player.Position, _inventory))
+                _droppedItems.RemoveAt(i);
+        }
 
         if (_needsMeshRebuild)
         {
@@ -423,6 +437,8 @@ public class Game1 : Game
         _basicEffect.Apply();
 
         _chunkMesh.Draw();
+
+        _droppedItemRenderer.Draw(_droppedItems, _player.Camera.ViewMatrix, _player.Camera.ProjectionMatrix);
 
         // Block-Outline
         if (_targetBlock.HasValue)
